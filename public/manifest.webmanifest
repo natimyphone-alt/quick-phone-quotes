@@ -1,0 +1,12 @@
+{
+  "name": "MyPhone Presupuestos",
+  "short_name": "MyPhone",
+  "description": "Gestión de presupuestos para reparación de celulares",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1c2454",
+  "icons": [
+    { "src": "/favicon.ico", "sizes": "any", "type": "image/x-icon" }
+  ]
+}
