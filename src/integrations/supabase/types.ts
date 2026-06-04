@@ -14,16 +14,214 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      precios_referencia: {
+        Row: {
+          clave: string
+          etiqueta: string
+          id: string
+          orden: number
+          precio: number
+          updated_at: string
+        }
+        Insert: {
+          clave: string
+          etiqueta: string
+          id?: string
+          orden?: number
+          precio: number
+          updated_at?: string
+        }
+        Update: {
+          clave?: string
+          etiqueta?: string
+          id?: string
+          orden?: number
+          precio?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      presupuestos: {
+        Row: {
+          cliente: string
+          costo: number
+          created_at: string
+          envio: number
+          estado: Database["public"]["Enums"]["presupuesto_estado"]
+          ganancia: number
+          id: string
+          iva: number
+          marca: string | null
+          modelo: string | null
+          notas: string | null
+          numero: number
+          precio_base: number
+          reparacion: string | null
+          subtotal: number
+          sucursal_id: string | null
+          telefono: string | null
+          tipo: Database["public"]["Enums"]["presupuesto_tipo"]
+          tipo_trabajo: string | null
+          total: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cliente: string
+          costo?: number
+          created_at?: string
+          envio?: number
+          estado?: Database["public"]["Enums"]["presupuesto_estado"]
+          ganancia?: number
+          id?: string
+          iva?: number
+          marca?: string | null
+          modelo?: string | null
+          notas?: string | null
+          numero?: number
+          precio_base?: number
+          reparacion?: string | null
+          subtotal?: number
+          sucursal_id?: string | null
+          telefono?: string | null
+          tipo: Database["public"]["Enums"]["presupuesto_tipo"]
+          tipo_trabajo?: string | null
+          total?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cliente?: string
+          costo?: number
+          created_at?: string
+          envio?: number
+          estado?: Database["public"]["Enums"]["presupuesto_estado"]
+          ganancia?: number
+          id?: string
+          iva?: number
+          marca?: string | null
+          modelo?: string | null
+          notas?: string | null
+          numero?: number
+          precio_base?: number
+          reparacion?: string | null
+          subtotal?: number
+          sucursal_id?: string | null
+          telefono?: string | null
+          tipo?: Database["public"]["Enums"]["presupuesto_tipo"]
+          tipo_trabajo?: string | null
+          total?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "presupuestos_sucursal_id_fkey"
+            columns: ["sucursal_id"]
+            isOneToOne: false
+            referencedRelation: "sucursales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          nombre: string | null
+          sucursal_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          nombre?: string | null
+          sucursal_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          nombre?: string | null
+          sucursal_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "profiles_sucursal_id_fkey"
+            columns: ["sucursal_id"]
+            isOneToOne: false
+            referencedRelation: "sucursales"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sucursales: {
+        Row: {
+          activo: boolean
+          created_at: string
+          direccion: string | null
+          id: string
+          nombre: string
+          telefono: string | null
+        }
+        Insert: {
+          activo?: boolean
+          created_at?: string
+          direccion?: string | null
+          id?: string
+          nombre: string
+          telefono?: string | null
+        }
+        Update: {
+          activo?: boolean
+          created_at?: string
+          direccion?: string | null
+          id?: string
+          nombre?: string
+          telefono?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      user_sucursal: { Args: { _user_id: string }; Returns: string }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "usuario"
+      presupuesto_estado: "pendiente" | "aprobado" | "rechazado" | "entregado"
+      presupuesto_tipo: "illia" | "soft"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +348,10 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "usuario"],
+      presupuesto_estado: ["pendiente", "aprobado", "rechazado", "entregado"],
+      presupuesto_tipo: ["illia", "soft"],
+    },
   },
 } as const
