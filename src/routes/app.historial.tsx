@@ -50,7 +50,7 @@ function Historial() {
   useEffect(() => { load(); }, []);
 
   const cambiarEstado = async (id: string, estado: string) => {
-    const { error } = await supabase.from("presupuestos").update({ estado }).eq("id", id);
+    const { error } = await supabase.from("presupuestos").update({ estado: estado as any }).eq("id", id);
     if (error) return toast.error(error.message);
     setItems(items.map(it => it.id === id ? { ...it, estado } : it));
   };
