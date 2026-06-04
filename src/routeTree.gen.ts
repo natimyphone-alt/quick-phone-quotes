@@ -9,38 +9,152 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppSoftRouteImport } from './routes/app.soft'
+import { Route as AppIlliaRouteImport } from './routes/app.illia'
+import { Route as AppHistorialRouteImport } from './routes/app.historial'
+import { Route as AppEstadisticasRouteImport } from './routes/app.estadisticas'
+import { Route as AppConfiguracionRouteImport } from './routes/app.configuracion'
 
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AppRoute = AppRouteImport.update({
+  id: '/app',
+  path: '/app',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AppIndexRoute = AppIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppSoftRoute = AppSoftRouteImport.update({
+  id: '/soft',
+  path: '/soft',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppIlliaRoute = AppIlliaRouteImport.update({
+  id: '/illia',
+  path: '/illia',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppHistorialRoute = AppHistorialRouteImport.update({
+  id: '/historial',
+  path: '/historial',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppEstadisticasRoute = AppEstadisticasRouteImport.update({
+  id: '/estadisticas',
+  path: '/estadisticas',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppConfiguracionRoute = AppConfiguracionRouteImport.update({
+  id: '/configuracion',
+  path: '/configuracion',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/app': typeof AppRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/app/configuracion': typeof AppConfiguracionRoute
+  '/app/estadisticas': typeof AppEstadisticasRoute
+  '/app/historial': typeof AppHistorialRoute
+  '/app/illia': typeof AppIlliaRoute
+  '/app/soft': typeof AppSoftRoute
+  '/app/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRoute
+  '/app/configuracion': typeof AppConfiguracionRoute
+  '/app/estadisticas': typeof AppEstadisticasRoute
+  '/app/historial': typeof AppHistorialRoute
+  '/app/illia': typeof AppIlliaRoute
+  '/app/soft': typeof AppSoftRoute
+  '/app': typeof AppIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/app': typeof AppRouteWithChildren
+  '/auth': typeof AuthRoute
+  '/app/configuracion': typeof AppConfiguracionRoute
+  '/app/estadisticas': typeof AppEstadisticasRoute
+  '/app/historial': typeof AppHistorialRoute
+  '/app/illia': typeof AppIlliaRoute
+  '/app/soft': typeof AppSoftRoute
+  '/app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/app'
+    | '/auth'
+    | '/app/configuracion'
+    | '/app/estadisticas'
+    | '/app/historial'
+    | '/app/illia'
+    | '/app/soft'
+    | '/app/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/app/configuracion'
+    | '/app/estadisticas'
+    | '/app/historial'
+    | '/app/illia'
+    | '/app/soft'
+    | '/app'
+  id:
+    | '__root__'
+    | '/'
+    | '/app'
+    | '/auth'
+    | '/app/configuracion'
+    | '/app/estadisticas'
+    | '/app/historial'
+    | '/app/illia'
+    | '/app/soft'
+    | '/app/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AppRoute: typeof AppRouteWithChildren
+  AuthRoute: typeof AuthRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/app': {
+      id: '/app'
+      path: '/app'
+      fullPath: '/app'
+      preLoaderRoute: typeof AppRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,22 +162,76 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/app/': {
+      id: '/app/'
+      path: '/'
+      fullPath: '/app/'
+      preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/soft': {
+      id: '/app/soft'
+      path: '/soft'
+      fullPath: '/app/soft'
+      preLoaderRoute: typeof AppSoftRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/illia': {
+      id: '/app/illia'
+      path: '/illia'
+      fullPath: '/app/illia'
+      preLoaderRoute: typeof AppIlliaRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/historial': {
+      id: '/app/historial'
+      path: '/historial'
+      fullPath: '/app/historial'
+      preLoaderRoute: typeof AppHistorialRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/estadisticas': {
+      id: '/app/estadisticas'
+      path: '/estadisticas'
+      fullPath: '/app/estadisticas'
+      preLoaderRoute: typeof AppEstadisticasRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/configuracion': {
+      id: '/app/configuracion'
+      path: '/configuracion'
+      fullPath: '/app/configuracion'
+      preLoaderRoute: typeof AppConfiguracionRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
+interface AppRouteChildren {
+  AppConfiguracionRoute: typeof AppConfiguracionRoute
+  AppEstadisticasRoute: typeof AppEstadisticasRoute
+  AppHistorialRoute: typeof AppHistorialRoute
+  AppIlliaRoute: typeof AppIlliaRoute
+  AppSoftRoute: typeof AppSoftRoute
+  AppIndexRoute: typeof AppIndexRoute
+}
+
+const AppRouteChildren: AppRouteChildren = {
+  AppConfiguracionRoute: AppConfiguracionRoute,
+  AppEstadisticasRoute: AppEstadisticasRoute,
+  AppHistorialRoute: AppHistorialRoute,
+  AppIlliaRoute: AppIlliaRoute,
+  AppSoftRoute: AppSoftRoute,
+  AppIndexRoute: AppIndexRoute,
+}
+
+const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AppRoute: AppRouteWithChildren,
+  AuthRoute: AuthRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
