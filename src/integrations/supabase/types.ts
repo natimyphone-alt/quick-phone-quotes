@@ -14,6 +14,66 @@ export type Database = {
   }
   public: {
     Tables: {
+      ordenes_trabajo: {
+        Row: {
+          accesorios: string | null
+          clave_desbloqueo: string | null
+          cliente: string
+          created_at: string
+          estado: Database["public"]["Enums"]["orden_estado"]
+          falla: string | null
+          id: string
+          imei: string | null
+          marca: string | null
+          modelo: string | null
+          notas: string | null
+          numero: number
+          sucursal_id: string | null
+          tecnico: string | null
+          telefono: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          accesorios?: string | null
+          clave_desbloqueo?: string | null
+          cliente: string
+          created_at?: string
+          estado?: Database["public"]["Enums"]["orden_estado"]
+          falla?: string | null
+          id?: string
+          imei?: string | null
+          marca?: string | null
+          modelo?: string | null
+          notas?: string | null
+          numero?: number
+          sucursal_id?: string | null
+          tecnico?: string | null
+          telefono?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          accesorios?: string | null
+          clave_desbloqueo?: string | null
+          cliente?: string
+          created_at?: string
+          estado?: Database["public"]["Enums"]["orden_estado"]
+          falla?: string | null
+          id?: string
+          imei?: string | null
+          marca?: string | null
+          modelo?: string | null
+          notas?: string | null
+          numero?: number
+          sucursal_id?: string | null
+          tecnico?: string | null
+          telefono?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       precios_referencia: {
         Row: {
           clave: string
@@ -220,6 +280,13 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "usuario"
+      orden_estado:
+        | "ingresado"
+        | "en_revision"
+        | "en_reparacion"
+        | "listo"
+        | "entregado"
+        | "no_reparado"
       presupuesto_estado: "pendiente" | "aprobado" | "rechazado" | "entregado"
       presupuesto_tipo: "illia" | "soft"
     }
@@ -350,6 +417,14 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "usuario"],
+      orden_estado: [
+        "ingresado",
+        "en_revision",
+        "en_reparacion",
+        "listo",
+        "entregado",
+        "no_reparado",
+      ],
       presupuesto_estado: ["pendiente", "aprobado", "rechazado", "entregado"],
       presupuesto_tipo: ["illia", "soft"],
     },
