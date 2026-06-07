@@ -32,12 +32,12 @@ export function generarPresupuestoPDF(p: PdfPresupuesto): jsPDF {
   doc.setTextColor(255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(24);
-  doc.text("MyPhone", 40, 45);
+  doc.text("MyPhone Hub", 40, 45);
   doc.setFontSize(11);
   doc.setFont("helvetica", "normal");
   doc.text("Presupuesto de Reparación", 40, 65);
   doc.setFontSize(10);
-  doc.text(`N° ${p.numero}`, W - 40, 40, { align: "right" });
+  doc.text(`P-${String(p.numero).padStart(6, "0")}`, W - 40, 40, { align: "right" });
   doc.text(p.fecha, W - 40, 58, { align: "right" });
   if (p.sucursal) doc.text(`Sucursal: ${p.sucursal}`, W - 40, 74, { align: "right" });
 
@@ -111,12 +111,12 @@ export function generarPresupuestoPDF(p: PdfPresupuesto): jsPDF {
     `Generado por ${p.usuario || "-"} • ${p.fecha}`,
     40, fy,
   );
-  doc.text("Gracias por confiar en MyPhone", W - 40, fy, { align: "right" });
+  doc.text("Gracias por confiar en MyPhone Hub", W - 40, fy, { align: "right" });
 
   return doc;
 }
 
 export function descargarPDF(p: PdfPresupuesto) {
   const doc = generarPresupuestoPDF(p);
-  doc.save(`Presupuesto-${p.numero}.pdf`);
+  doc.save(`P-${String(p.numero).padStart(6, "0")}.pdf`);
 }

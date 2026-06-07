@@ -59,7 +59,7 @@ function AuthPage() {
           <div className="mx-auto bg-primary text-primary-foreground rounded-2xl w-14 h-14 flex items-center justify-center">
             <Smartphone className="w-7 h-7" />
           </div>
-          <CardTitle className="text-2xl">MyPhone Presupuestos</CardTitle>
+          <CardTitle className="text-2xl">MyPhone Hub</CardTitle>
           <CardDescription>Ingresá para gestionar tus presupuestos</CardDescription>
         </CardHeader>
         <CardContent>
