@@ -14,6 +14,7 @@ import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
 import { Route as AppSoftRouteImport } from './routes/app.soft'
+import { Route as AppOrdenesRouteImport } from './routes/app.ordenes'
 import { Route as AppIlliaRouteImport } from './routes/app.illia'
 import { Route as AppHistorialRouteImport } from './routes/app.historial'
 import { Route as AppEstadisticasRouteImport } from './routes/app.estadisticas'
@@ -42,6 +43,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
 const AppSoftRoute = AppSoftRouteImport.update({
   id: '/soft',
   path: '/soft',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppOrdenesRoute = AppOrdenesRouteImport.update({
+  id: '/ordenes',
+  path: '/ordenes',
   getParentRoute: () => AppRoute,
 } as any)
 const AppIlliaRoute = AppIlliaRouteImport.update({
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/app/estadisticas': typeof AppEstadisticasRoute
   '/app/historial': typeof AppHistorialRoute
   '/app/illia': typeof AppIlliaRoute
+  '/app/ordenes': typeof AppOrdenesRoute
   '/app/soft': typeof AppSoftRoute
   '/app/': typeof AppIndexRoute
 }
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/app/estadisticas': typeof AppEstadisticasRoute
   '/app/historial': typeof AppHistorialRoute
   '/app/illia': typeof AppIlliaRoute
+  '/app/ordenes': typeof AppOrdenesRoute
   '/app/soft': typeof AppSoftRoute
   '/app': typeof AppIndexRoute
 }
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/app/estadisticas': typeof AppEstadisticasRoute
   '/app/historial': typeof AppHistorialRoute
   '/app/illia': typeof AppIlliaRoute
+  '/app/ordenes': typeof AppOrdenesRoute
   '/app/soft': typeof AppSoftRoute
   '/app/': typeof AppIndexRoute
 }
@@ -108,6 +117,7 @@ export interface FileRouteTypes {
     | '/app/estadisticas'
     | '/app/historial'
     | '/app/illia'
+    | '/app/ordenes'
     | '/app/soft'
     | '/app/'
   fileRoutesByTo: FileRoutesByTo
@@ -118,6 +128,7 @@ export interface FileRouteTypes {
     | '/app/estadisticas'
     | '/app/historial'
     | '/app/illia'
+    | '/app/ordenes'
     | '/app/soft'
     | '/app'
   id:
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/app/estadisticas'
     | '/app/historial'
     | '/app/illia'
+    | '/app/ordenes'
     | '/app/soft'
     | '/app/'
   fileRoutesById: FileRoutesById
@@ -176,6 +188,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSoftRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/ordenes': {
+      id: '/app/ordenes'
+      path: '/ordenes'
+      fullPath: '/app/ordenes'
+      preLoaderRoute: typeof AppOrdenesRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/app/illia': {
       id: '/app/illia'
       path: '/illia'
@@ -212,6 +231,7 @@ interface AppRouteChildren {
   AppEstadisticasRoute: typeof AppEstadisticasRoute
   AppHistorialRoute: typeof AppHistorialRoute
   AppIlliaRoute: typeof AppIlliaRoute
+  AppOrdenesRoute: typeof AppOrdenesRoute
   AppSoftRoute: typeof AppSoftRoute
   AppIndexRoute: typeof AppIndexRoute
 }
@@ -221,6 +241,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppEstadisticasRoute: AppEstadisticasRoute,
   AppHistorialRoute: AppHistorialRoute,
   AppIlliaRoute: AppIlliaRoute,
+  AppOrdenesRoute: AppOrdenesRoute,
   AppSoftRoute: AppSoftRoute,
   AppIndexRoute: AppIndexRoute,
 }
@@ -235,3 +256,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
