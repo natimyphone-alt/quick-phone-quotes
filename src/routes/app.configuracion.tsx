@@ -181,3 +181,59 @@ function PreciosTab() {
     </Card>
   );
 }
+
+function ManoObraTab() {
+  const [items, setItems] = useState<any[]>([]);
+  const [nuevo, setNuevo] = useState({ tipo_reparacion: "", precio: 0 });
+
+  const load = () => supabase.from("mano_obra").select("*").order("tipo_reparacion").then(({ data }) => setItems(data || []));
+  useEffect(() => { load(); }, []);
+
+  const crear = async () => {
+    if (!nuevo.tipo_reparacion.trim()) return;
+    const { error } = await supabase.from("mano_obra").insert({
+      tipo_reparacion: nuevo.tipo_reparacion.trim(),
+      precio: Number(nuevo.precio) || 0,
+    });
+    if (error) return toast.error(error.message);
+    toast.success("Creado"); setNuevo({ tipo_reparacion: "", precio: 0 }); load();
+  };
+
+  const guardar = async (id: string, precio: number) => {
+    const { error } = await supabase.from("mano_obra").update({ precio }).eq("id", id);
+    if (error) return toast.error(error.message);
+    toast.success("Actualizado");
+  };
+
+  const eliminar = async (id: string) => {
+    if (!confirm("¿Eliminar tipo de reparación?")) return;
+    const { error } = await supabase.from("mano_obra").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    load();
+  };
+
+  return (
+    <Card>
+      <CardHeader><CardTitle>Mano de Obra por tipo de reparación</CardTitle></CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_160px_auto] gap-2">
+          <Input placeholder="Tipo de reparación (ej: Cambio de módulo)" value={nuevo.tipo_reparacion}
+            onChange={e => setNuevo({ ...nuevo, tipo_reparacion: e.target.value })} />
+          <Input type="number" placeholder="Precio mano de obra" value={nuevo.precio}
+            onChange={e => setNuevo({ ...nuevo, precio: Number(e.target.value) })} />
+          <Button onClick={crear}>Agregar</Button>
+        </div>
+        <div className="divide-y border rounded-md">
+          {items.map(m => (
+            <div key={m.id} className="p-3 grid grid-cols-1 sm:grid-cols-[1fr_160px_auto] gap-2 items-center">
+              <div className="font-medium">{m.tipo_reparacion}</div>
+              <Input type="number" defaultValue={m.precio} onBlur={e => guardar(m.id, Number(e.target.value))} />
+              <Button size="sm" variant="destructive" onClick={() => eliminar(m.id)}>Eliminar</Button>
+            </div>
+          ))}
+          {items.length === 0 && <div className="p-4 text-sm text-muted-foreground text-center">Sin tipos cargados</div>}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
