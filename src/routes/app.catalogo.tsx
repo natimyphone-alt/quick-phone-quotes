@@ -1,0 +1,218 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { PROVEEDORES, aplicarRecargoProveedor } from "@/lib/proveedores";
+import { formatARS } from "@/lib/calculos";
+import { toast } from "sonner";
+import { Plus, Trash2, ExternalLink, Search, Pencil, Save, X } from "lucide-react";
+
+export const Route = createFileRoute("/app/catalogo")({
+  component: Catalogo,
+});
+
+interface Repuesto {
+  id: string;
+  proveedor: string;
+  marca: string;
+  modelo: string;
+  tipo_repuesto: string;
+  calidad: string | null;
+  precio: number;
+  url_producto: string | null;
+  fecha_actualizacion: string;
+}
+
+const VACIO = {
+  proveedor: "Patagonia Cell", marca: "", modelo: "", tipo_repuesto: "Cambio de módulo",
+  calidad: "OLED", precio: 0, url_producto: "",
+};
+
+function Catalogo() {
+  const { isAdmin } = useAuth();
+  const [items, setItems] = useState<Repuesto[]>([]);
+  const [q, setQ] = useState("");
+  const [filtroProv, setFiltroProv] = useState<string>("todos");
+  const [loading, setLoading] = useState(true);
+  const [creando, setCreando] = useState(false);
+  const [nuevo, setNuevo] = useState<any>(VACIO);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [edit, setEdit] = useState<any>(VACIO);
+
+  const load = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from("catalogo_repuestos")
+      .select("*").order("marca").order("modelo").limit(500);
+    setLoading(false);
+    if (error) return toast.error(error.message);
+    setItems(data || []);
+  };
+  useEffect(() => { load(); }, []);
+
+  const crear = async () => {
+    if (!nuevo.marca.trim() || !nuevo.modelo.trim()) return toast.error("Marca y modelo requeridos");
+    const { error } = await supabase.from("catalogo_repuestos").insert({
+      ...nuevo,
+      precio: Number(nuevo.precio) || 0,
+      fecha_actualizacion: new Date().toISOString(),
+    });
+    if (error) return toast.error(error.message);
+    toast.success("Repuesto agregado");
+    setNuevo(VACIO); setCreando(false); load();
+  };
+
+  const eliminar = async (id: string) => {
+    if (!confirm("¿Eliminar repuesto?")) return;
+    const { error } = await supabase.from("catalogo_repuestos").delete().eq("id", id);
+    if (error) return toast.error(error.message);
+    load();
+  };
+
+  const startEdit = (r: Repuesto) => {
+    setEditId(r.id);
+    setEdit({
+      proveedor: r.proveedor, marca: r.marca, modelo: r.modelo,
+      tipo_repuesto: r.tipo_repuesto, calidad: r.calidad || "",
+      precio: r.precio, url_producto: r.url_producto || "",
+    });
+  };
+
+  const guardarEdit = async () => {
+    if (!editId) return;
+    const { error } = await supabase.from("catalogo_repuestos").update({
+      ...edit,
+      precio: Number(edit.precio) || 0,
+      fecha_actualizacion: new Date().toISOString(),
+    }).eq("id", editId);
+    if (error) return toast.error(error.message);
+    toast.success("Actualizado");
+    setEditId(null); load();
+  };
+
+  const filtrados = items.filter(r => {
+    if (filtroProv !== "todos" && r.proveedor !== filtroProv) return false;
+    if (!q.trim()) return true;
+    const term = q.toLowerCase();
+    return [r.marca, r.modelo, r.tipo_repuesto, r.calidad].some(v => (v || "").toLowerCase().includes(term));
+  });
+
+  return (
+    <div className="space-y-4 max-w-5xl mx-auto">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h1 className="text-2xl font-bold">Catálogo de Repuestos</h1>
+        {isAdmin && (
+          <Button onClick={() => setCreando(c => !c)} size="lg">
+            <Plus className="w-4 h-4 mr-1" />{creando ? "Cerrar" : "Nuevo"}
+          </Button>
+        )}
+      </div>
+
+      {isAdmin && creando && (
+        <Card>
+          <CardHeader><CardTitle>Nuevo repuesto</CardTitle></CardHeader>
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Field label="Proveedor">
+              <Select value={nuevo.proveedor} onValueChange={v => setNuevo({ ...nuevo, proveedor: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{PROVEEDORES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+              </Select>
+            </Field>
+            <Field label="Tipo de repuesto"><Input value={nuevo.tipo_repuesto} onChange={e => setNuevo({ ...nuevo, tipo_repuesto: e.target.value })} /></Field>
+            <Field label="Marca"><Input value={nuevo.marca} onChange={e => setNuevo({ ...nuevo, marca: e.target.value })} /></Field>
+            <Field label="Modelo"><Input value={nuevo.modelo} onChange={e => setNuevo({ ...nuevo, modelo: e.target.value })} /></Field>
+            <Field label="Calidad (OLED, Original, etc.)"><Input value={nuevo.calidad} onChange={e => setNuevo({ ...nuevo, calidad: e.target.value })} /></Field>
+            <Field label="Precio catálogo"><Input type="number" min={0} value={nuevo.precio} onChange={e => setNuevo({ ...nuevo, precio: e.target.value })} /></Field>
+            <Field label="URL del producto" full><Input value={nuevo.url_producto} onChange={e => setNuevo({ ...nuevo, url_producto: e.target.value })} /></Field>
+            <div className="sm:col-span-2"><Button onClick={crear} className="w-full" size="lg">Guardar</Button></div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_200px] gap-2">
+        <div className="relative">
+          <Search className="absolute left-2 top-2.5 w-4 h-4 text-muted-foreground" />
+          <Input className="pl-8" placeholder="Buscar marca, modelo, tipo..." value={q} onChange={e => setQ(e.target.value)} />
+        </div>
+        <Select value={filtroProv} onValueChange={setFiltroProv}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos los proveedores</SelectItem>
+            {PROVEEDORES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {loading ? <p className="text-muted-foreground">Cargando...</p> :
+       filtrados.length === 0 ? <p className="text-muted-foreground text-center py-8">Sin resultados.</p> :
+        <div className="space-y-2">
+          {filtrados.map(r => {
+            const final = aplicarRecargoProveedor(r.proveedor, Number(r.precio));
+            const enEdit = editId === r.id;
+            return (
+              <Card key={r.id}>
+                <CardContent className="p-3">
+                  {enEdit ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <Select value={edit.proveedor} onValueChange={v => setEdit({ ...edit, proveedor: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{PROVEEDORES.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+                      </Select>
+                      <Input value={edit.tipo_repuesto} onChange={e => setEdit({ ...edit, tipo_repuesto: e.target.value })} placeholder="Tipo" />
+                      <Input value={edit.marca} onChange={e => setEdit({ ...edit, marca: e.target.value })} placeholder="Marca" />
+                      <Input value={edit.modelo} onChange={e => setEdit({ ...edit, modelo: e.target.value })} placeholder="Modelo" />
+                      <Input value={edit.calidad} onChange={e => setEdit({ ...edit, calidad: e.target.value })} placeholder="Calidad" />
+                      <Input type="number" value={edit.precio} onChange={e => setEdit({ ...edit, precio: e.target.value })} placeholder="Precio" />
+                      <Input className="sm:col-span-2" value={edit.url_producto} onChange={e => setEdit({ ...edit, url_producto: e.target.value })} placeholder="URL" />
+                      <div className="sm:col-span-2 flex gap-2">
+                        <Button onClick={guardarEdit} className="flex-1"><Save className="w-4 h-4 mr-1" />Guardar</Button>
+                        <Button variant="ghost" onClick={() => setEditId(null)}><X className="w-4 h-4" /></Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold">{r.marca} {r.modelo}</span>
+                          <Badge variant="secondary">{r.tipo_repuesto}</Badge>
+                          {r.calidad && <Badge>{r.calidad}</Badge>}
+                        </div>
+                        <div className="text-xs text-muted-foreground mt-0.5">
+                          {r.proveedor} • Catálogo {formatARS(Number(r.precio))}
+                          {r.proveedor === "FV Mayorista" && <span> (+{formatARS(10000)} recargo)</span>}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="font-bold text-primary">{formatARS(final)}</div>
+                        <div className="flex gap-1 mt-1 justify-end">
+                          {r.url_producto && (
+                            <a href={r.url_producto} target="_blank" rel="noreferrer">
+                              <Button size="sm" variant="ghost"><ExternalLink className="w-4 h-4" /></Button>
+                            </a>
+                          )}
+                          {isAdmin && <>
+                            <Button size="sm" variant="ghost" onClick={() => startEdit(r)}><Pencil className="w-4 h-4" /></Button>
+                            <Button size="sm" variant="ghost" onClick={() => eliminar(r.id)}><Trash2 className="w-4 h-4 text-destructive" /></Button>
+                          </>}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      }
+    </div>
+  );
+}
+
+function Field({ label, children, full }: { label: string; children: React.ReactNode; full?: boolean }) {
+  return <div className={`space-y-1.5 ${full ? "sm:col-span-2" : ""}`}><Label>{label}</Label>{children}</div>;
+}

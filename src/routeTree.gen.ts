@@ -19,6 +19,7 @@ import { Route as AppIlliaRouteImport } from './routes/app.illia'
 import { Route as AppHistorialRouteImport } from './routes/app.historial'
 import { Route as AppEstadisticasRouteImport } from './routes/app.estadisticas'
 import { Route as AppConfiguracionRouteImport } from './routes/app.configuracion'
+import { Route as AppCatalogoRouteImport } from './routes/app.catalogo'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -70,11 +71,17 @@ const AppConfiguracionRoute = AppConfiguracionRouteImport.update({
   path: '/configuracion',
   getParentRoute: () => AppRoute,
 } as any)
+const AppCatalogoRoute = AppCatalogoRouteImport.update({
+  id: '/catalogo',
+  path: '/catalogo',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/app/catalogo': typeof AppCatalogoRoute
   '/app/configuracion': typeof AppConfiguracionRoute
   '/app/estadisticas': typeof AppEstadisticasRoute
   '/app/historial': typeof AppHistorialRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/app/catalogo': typeof AppCatalogoRoute
   '/app/configuracion': typeof AppConfiguracionRoute
   '/app/estadisticas': typeof AppEstadisticasRoute
   '/app/historial': typeof AppHistorialRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/app': typeof AppRouteWithChildren
   '/auth': typeof AuthRoute
+  '/app/catalogo': typeof AppCatalogoRoute
   '/app/configuracion': typeof AppConfiguracionRoute
   '/app/estadisticas': typeof AppEstadisticasRoute
   '/app/historial': typeof AppHistorialRoute
@@ -113,6 +122,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/app/catalogo'
     | '/app/configuracion'
     | '/app/estadisticas'
     | '/app/historial'
@@ -124,6 +134,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/app/catalogo'
     | '/app/configuracion'
     | '/app/estadisticas'
     | '/app/historial'
@@ -136,6 +147,7 @@ export interface FileRouteTypes {
     | '/'
     | '/app'
     | '/auth'
+    | '/app/catalogo'
     | '/app/configuracion'
     | '/app/estadisticas'
     | '/app/historial'
@@ -223,10 +235,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppConfiguracionRouteImport
       parentRoute: typeof AppRoute
     }
+    '/app/catalogo': {
+      id: '/app/catalogo'
+      path: '/catalogo'
+      fullPath: '/app/catalogo'
+      preLoaderRoute: typeof AppCatalogoRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
 interface AppRouteChildren {
+  AppCatalogoRoute: typeof AppCatalogoRoute
   AppConfiguracionRoute: typeof AppConfiguracionRoute
   AppEstadisticasRoute: typeof AppEstadisticasRoute
   AppHistorialRoute: typeof AppHistorialRoute
@@ -237,6 +257,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppCatalogoRoute: AppCatalogoRoute,
   AppConfiguracionRoute: AppConfiguracionRoute,
   AppEstadisticasRoute: AppEstadisticasRoute,
   AppHistorialRoute: AppHistorialRoute,

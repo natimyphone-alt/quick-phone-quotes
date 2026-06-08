@@ -34,7 +34,7 @@ function Historial() {
   const load = async () => {
     setLoading(true);
     let query = supabase.from("presupuestos")
-      .select("*, sucursales(nombre)")
+      .select("*, sucursales(nombre), opciones_presupuesto(proveedor, calidad, seleccionada, total)")
       .order("created_at", { ascending: false })
       .limit(200);
     if (q.trim()) {
@@ -96,6 +96,21 @@ function Historial() {
                 <div className="text-sm">
                   {p.marca} {p.modelo} — <span className="text-muted-foreground">{p.reparacion || p.tipo_trabajo}</span>
                 </div>
+                {(() => {
+                  const sel = (p.opciones_presupuesto || []).find((o: any) => o.seleccionada);
+                  if (sel) return (
+                    <div className="text-xs">
+                      <Badge variant="secondary">{sel.proveedor}</Badge>{" "}
+                      {sel.calidad && <Badge>{sel.calidad}</Badge>}
+                    </div>
+                  );
+                  if ((p.opciones_presupuesto || []).length > 0) return (
+                    <div className="text-xs text-muted-foreground">
+                      {p.opciones_presupuesto.length} opciones disponibles — sin selección
+                    </div>
+                  );
+                  return null;
+                })()}
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="font-bold text-primary text-lg">{formatARS(Number(p.total))}</div>
                   <div className="flex gap-2 flex-wrap">
