@@ -14,6 +14,128 @@ export type Database = {
   }
   public: {
     Tables: {
+      catalogo_repuestos: {
+        Row: {
+          calidad: string | null
+          created_at: string
+          fecha_actualizacion: string
+          id: string
+          marca: string
+          modelo: string
+          precio: number
+          proveedor: string
+          tipo_repuesto: string
+          updated_at: string
+          url_producto: string | null
+        }
+        Insert: {
+          calidad?: string | null
+          created_at?: string
+          fecha_actualizacion?: string
+          id?: string
+          marca: string
+          modelo: string
+          precio?: number
+          proveedor: string
+          tipo_repuesto: string
+          updated_at?: string
+          url_producto?: string | null
+        }
+        Update: {
+          calidad?: string | null
+          created_at?: string
+          fecha_actualizacion?: string
+          id?: string
+          marca?: string
+          modelo?: string
+          precio?: number
+          proveedor?: string
+          tipo_repuesto?: string
+          updated_at?: string
+          url_producto?: string | null
+        }
+        Relationships: []
+      }
+      mano_obra: {
+        Row: {
+          created_at: string
+          id: string
+          precio: number
+          tipo_reparacion: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          precio?: number
+          tipo_reparacion: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          precio?: number
+          tipo_reparacion?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      opciones_presupuesto: {
+        Row: {
+          calidad: string | null
+          costo_repuesto: number
+          created_at: string
+          envio: number
+          ganancia: number
+          id: string
+          iva: number
+          mano_obra: number
+          presupuesto_id: string
+          proveedor: string
+          seleccionada: boolean
+          total: number
+          updated_at: string
+        }
+        Insert: {
+          calidad?: string | null
+          costo_repuesto?: number
+          created_at?: string
+          envio?: number
+          ganancia?: number
+          id?: string
+          iva?: number
+          mano_obra?: number
+          presupuesto_id: string
+          proveedor: string
+          seleccionada?: boolean
+          total?: number
+          updated_at?: string
+        }
+        Update: {
+          calidad?: string | null
+          costo_repuesto?: number
+          created_at?: string
+          envio?: number
+          ganancia?: number
+          id?: string
+          iva?: number
+          mano_obra?: number
+          presupuesto_id?: string
+          proveedor?: string
+          seleccionada?: boolean
+          total?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opciones_presupuesto_presupuesto_id_fkey"
+            columns: ["presupuesto_id"]
+            isOneToOne: false
+            referencedRelation: "presupuestos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ordenes_trabajo: {
         Row: {
           accesorios: string | null
