@@ -25,14 +25,16 @@ function Configuracion() {
     <div className="space-y-4 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold">Configuración</h1>
       <Tabs defaultValue="sucursales">
-        <TabsList>
+        <TabsList className="flex flex-wrap h-auto">
           <TabsTrigger value="sucursales">Sucursales</TabsTrigger>
           <TabsTrigger value="usuarios">Usuarios</TabsTrigger>
           <TabsTrigger value="precios">Precios Soft</TabsTrigger>
+          <TabsTrigger value="mano_obra">Mano de Obra</TabsTrigger>
         </TabsList>
         <TabsContent value="sucursales"><SucursalesTab /></TabsContent>
         <TabsContent value="usuarios"><UsuariosTab /></TabsContent>
         <TabsContent value="precios"><PreciosTab /></TabsContent>
+        <TabsContent value="mano_obra"><ManoObraTab /></TabsContent>
       </Tabs>
     </div>
   );
