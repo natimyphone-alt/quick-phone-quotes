@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Smartphone, LogOut, Home, ClipboardList, History, Settings, BarChart3 } from "lucide-react";
+import { Smartphone, LogOut, Home, ClipboardList, History, Settings, Package } from "lucide-react";
 
 export const Route = createFileRoute("/app")({
   ssr: false,
@@ -30,11 +30,11 @@ function AppLayout() {
 
   const navItems = [
     { to: "/app", label: "Inicio", icon: Home, exact: true },
-    { to: "/app/ordenes", label: "Órdenes", icon: ClipboardList },
+    { to: "/app/catalogo", label: "Catálogo", icon: Package },
     { to: "/app/historial", label: "Historial", icon: History },
-    ...(isAdmin ? [
-      { to: "/app/configuracion", label: "Config", icon: Settings },
-    ] : [{ to: "/app/illia", label: "Illia", icon: ClipboardList }]),
+    ...(isAdmin
+      ? [{ to: "/app/configuracion", label: "Config", icon: Settings }]
+      : [{ to: "/app/ordenes", label: "Órdenes", icon: ClipboardList }]),
   ];
 
   return (
