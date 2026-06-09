@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,10 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { PROVEEDORES, aplicarRecargoProveedor } from "@/lib/proveedores";
+import { PROVEEDORES, calcularPrecioFinal, RECARGO_FV } from "@/lib/proveedores";
 import { formatARS } from "@/lib/calculos";
 import { toast } from "sonner";
-import { Plus, Trash2, ExternalLink, Search, Pencil, Save, X } from "lucide-react";
+import { Plus, Trash2, ExternalLink, Search, Pencil, Save, X, RefreshCw } from "lucide-react";
+import { syncPatagonia, syncFV, syncTodo } from "@/lib/sync.functions";
 
 export const Route = createFileRoute("/app/catalogo")({
   component: Catalogo,
@@ -25,8 +27,11 @@ interface Repuesto {
   tipo_repuesto: string;
   calidad: string | null;
   precio: number;
+  precio_proveedor: number | null;
+  precio_calculado: number | null;
   url_producto: string | null;
   fecha_actualizacion: string;
+  ultima_sincronizacion: string | null;
 }
 
 const VACIO = {
@@ -40,10 +45,15 @@ function Catalogo() {
   const [q, setQ] = useState("");
   const [filtroProv, setFiltroProv] = useState<string>("todos");
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState<string | null>(null);
   const [creando, setCreando] = useState(false);
   const [nuevo, setNuevo] = useState<any>(VACIO);
   const [editId, setEditId] = useState<string | null>(null);
   const [edit, setEdit] = useState<any>(VACIO);
+
+  const syncPatagoniaFn = useServerFn(syncPatagonia);
+  const syncFVFn = useServerFn(syncFV);
+  const syncTodoFn = useServerFn(syncTodo);
 
   const load = async () => {
     setLoading(true);
@@ -51,15 +61,19 @@ function Catalogo() {
       .select("*").order("marca").order("modelo").limit(500);
     setLoading(false);
     if (error) return toast.error(error.message);
-    setItems(data || []);
+    setItems((data as any) || []);
   };
   useEffect(() => { load(); }, []);
 
   const crear = async () => {
     if (!nuevo.marca.trim() || !nuevo.modelo.trim()) return toast.error("Marca y modelo requeridos");
+    const precioProv = Number(nuevo.precio) || 0;
+    const precioCalc = calcularPrecioFinal(nuevo.proveedor, precioProv);
     const { error } = await supabase.from("catalogo_repuestos").insert({
       ...nuevo,
-      precio: Number(nuevo.precio) || 0,
+      precio: precioProv,
+      precio_proveedor: precioProv,
+      precio_calculado: precioCalc,
       fecha_actualizacion: new Date().toISOString(),
     });
     if (error) return toast.error(error.message);
@@ -79,20 +93,45 @@ function Catalogo() {
     setEdit({
       proveedor: r.proveedor, marca: r.marca, modelo: r.modelo,
       tipo_repuesto: r.tipo_repuesto, calidad: r.calidad || "",
-      precio: r.precio, url_producto: r.url_producto || "",
+      precio: r.precio_proveedor ?? r.precio, url_producto: r.url_producto || "",
     });
   };
 
   const guardarEdit = async () => {
     if (!editId) return;
+    const precioProv = Number(edit.precio) || 0;
+    const precioCalc = calcularPrecioFinal(edit.proveedor, precioProv);
     const { error } = await supabase.from("catalogo_repuestos").update({
       ...edit,
-      precio: Number(edit.precio) || 0,
+      precio: precioProv,
+      precio_proveedor: precioProv,
+      precio_calculado: precioCalc,
       fecha_actualizacion: new Date().toISOString(),
     }).eq("id", editId);
     if (error) return toast.error(error.message);
     toast.success("Actualizado");
     setEditId(null); load();
+  };
+
+  const runSync = async (key: "patagonia" | "fv" | "todo") => {
+    setSyncing(key);
+    try {
+      if (key === "patagonia") {
+        const r = await syncPatagoniaFn();
+        (r.ok ? toast.success : toast.message)(r.message);
+      } else if (key === "fv") {
+        const r = await syncFVFn();
+        (r.ok ? toast.success : toast.message)(r.message);
+      } else {
+        const rs = await syncTodoFn();
+        rs.forEach(r => (r.ok ? toast.success : toast.message)(r.message));
+      }
+      load();
+    } catch (e: any) {
+      toast.error(e?.message || "Error de sincronización");
+    } finally {
+      setSyncing(null);
+    }
   };
 
   const filtrados = items.filter(r => {
@@ -113,6 +152,25 @@ function Catalogo() {
         )}
       </div>
 
+      {isAdmin && (
+        <Card>
+          <CardContent className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <Button variant="outline" onClick={() => runSync("patagonia")} disabled={!!syncing}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "patagonia" ? "animate-spin" : ""}`} />
+              Sincronizar Patagonia Cell
+            </Button>
+            <Button variant="outline" onClick={() => runSync("fv")} disabled={!!syncing}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "fv" ? "animate-spin" : ""}`} />
+              Sincronizar FV Mayorista
+            </Button>
+            <Button onClick={() => runSync("todo")} disabled={!!syncing}>
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "todo" ? "animate-spin" : ""}`} />
+              Sincronizar Todo
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {isAdmin && creando && (
         <Card>
           <CardHeader><CardTitle>Nuevo repuesto</CardTitle></CardHeader>
@@ -127,7 +185,7 @@ function Catalogo() {
             <Field label="Marca"><Input value={nuevo.marca} onChange={e => setNuevo({ ...nuevo, marca: e.target.value })} /></Field>
             <Field label="Modelo"><Input value={nuevo.modelo} onChange={e => setNuevo({ ...nuevo, modelo: e.target.value })} /></Field>
             <Field label="Calidad (OLED, Original, etc.)"><Input value={nuevo.calidad} onChange={e => setNuevo({ ...nuevo, calidad: e.target.value })} /></Field>
-            <Field label="Precio catálogo"><Input type="number" min={0} value={nuevo.precio} onChange={e => setNuevo({ ...nuevo, precio: e.target.value })} /></Field>
+            <Field label="Precio proveedor"><Input type="number" min={0} value={nuevo.precio} onChange={e => setNuevo({ ...nuevo, precio: e.target.value })} /></Field>
             <Field label="URL del producto" full><Input value={nuevo.url_producto} onChange={e => setNuevo({ ...nuevo, url_producto: e.target.value })} /></Field>
             <div className="sm:col-span-2"><Button onClick={crear} className="w-full" size="lg">Guardar</Button></div>
           </CardContent>
@@ -152,8 +210,10 @@ function Catalogo() {
        filtrados.length === 0 ? <p className="text-muted-foreground text-center py-8">Sin resultados.</p> :
         <div className="space-y-2">
           {filtrados.map(r => {
-            const final = aplicarRecargoProveedor(r.proveedor, Number(r.precio));
+            const precioProv = Number(r.precio_proveedor ?? r.precio);
+            const final = Number(r.precio_calculado ?? calcularPrecioFinal(r.proveedor, precioProv));
             const enEdit = editId === r.id;
+            const fechaSync = r.ultima_sincronizacion || r.fecha_actualizacion;
             return (
               <Card key={r.id}>
                 <CardContent className="p-3">
@@ -167,7 +227,7 @@ function Catalogo() {
                       <Input value={edit.marca} onChange={e => setEdit({ ...edit, marca: e.target.value })} placeholder="Marca" />
                       <Input value={edit.modelo} onChange={e => setEdit({ ...edit, modelo: e.target.value })} placeholder="Modelo" />
                       <Input value={edit.calidad} onChange={e => setEdit({ ...edit, calidad: e.target.value })} placeholder="Calidad" />
-                      <Input type="number" value={edit.precio} onChange={e => setEdit({ ...edit, precio: e.target.value })} placeholder="Precio" />
+                      <Input type="number" value={edit.precio} onChange={e => setEdit({ ...edit, precio: e.target.value })} placeholder="Precio proveedor" />
                       <Input className="sm:col-span-2" value={edit.url_producto} onChange={e => setEdit({ ...edit, url_producto: e.target.value })} placeholder="URL" />
                       <div className="sm:col-span-2 flex gap-2">
                         <Button onClick={guardarEdit} className="flex-1"><Save className="w-4 h-4 mr-1" />Guardar</Button>
@@ -183,11 +243,15 @@ function Catalogo() {
                           {r.calidad && <Badge>{r.calidad}</Badge>}
                         </div>
                         <div className="text-xs text-muted-foreground mt-0.5">
-                          {r.proveedor} • Catálogo {formatARS(Number(r.precio))}
-                          {r.proveedor === "FV Mayorista" && <span> (+{formatARS(10000)} recargo)</span>}
+                          {r.proveedor} • Proveedor {formatARS(precioProv)}
+                          {r.proveedor === "FV Mayorista" && <span> (+{formatARS(RECARGO_FV)} recargo)</span>}
+                        </div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Última actualización: {new Date(fechaSync).toLocaleString("es-AR")}
                         </div>
                       </div>
                       <div className="text-right">
+                        <div className="text-xs text-muted-foreground">Calculado</div>
                         <div className="font-bold text-primary">{formatARS(final)}</div>
                         <div className="flex gap-1 mt-1 justify-end">
                           {r.url_producto && (

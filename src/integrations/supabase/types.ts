@@ -23,8 +23,11 @@ export type Database = {
           marca: string
           modelo: string
           precio: number
+          precio_calculado: number | null
+          precio_proveedor: number | null
           proveedor: string
           tipo_repuesto: string
+          ultima_sincronizacion: string | null
           updated_at: string
           url_producto: string | null
         }
@@ -36,8 +39,11 @@ export type Database = {
           marca: string
           modelo: string
           precio?: number
+          precio_calculado?: number | null
+          precio_proveedor?: number | null
           proveedor: string
           tipo_repuesto: string
+          ultima_sincronizacion?: string | null
           updated_at?: string
           url_producto?: string | null
         }
@@ -49,8 +55,11 @@ export type Database = {
           marca?: string
           modelo?: string
           precio?: number
+          precio_calculado?: number | null
+          precio_proveedor?: number | null
           proveedor?: string
           tipo_repuesto?: string
+          ultima_sincronizacion?: string | null
           updated_at?: string
           url_producto?: string | null
         }
@@ -60,6 +69,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          minimo_final: number | null
           precio: number
           tipo_reparacion: string
           updated_at: string
@@ -67,6 +77,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          minimo_final?: number | null
           precio?: number
           tipo_reparacion: string
           updated_at?: string
@@ -74,6 +85,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          minimo_final?: number | null
           precio?: number
           tipo_reparacion?: string
           updated_at?: string
@@ -340,6 +352,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      proveedores_config: {
+        Row: {
+          created_at: string
+          estado: string
+          id: string
+          nombre: string
+          notas: string | null
+          password_encrypted: string | null
+          ultima_sincronizacion: string | null
+          updated_at: string
+          url: string | null
+          usuario: string | null
+        }
+        Insert: {
+          created_at?: string
+          estado?: string
+          id?: string
+          nombre: string
+          notas?: string | null
+          password_encrypted?: string | null
+          ultima_sincronizacion?: string | null
+          updated_at?: string
+          url?: string | null
+          usuario?: string | null
+        }
+        Update: {
+          created_at?: string
+          estado?: string
+          id?: string
+          nombre?: string
+          notas?: string | null
+          password_encrypted?: string | null
+          ultima_sincronizacion?: string | null
+          updated_at?: string
+          url?: string | null
+          usuario?: string | null
+        }
+        Relationships: []
       }
       sucursales: {
         Row: {
