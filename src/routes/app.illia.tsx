@@ -221,6 +221,11 @@ function IlliaPage() {
                   <div className="flex justify-between bg-primary text-primary-foreground rounded-md p-3 font-bold">
                     <span>TOTAL</span><span>{formatARS(op.total)}</span>
                   </div>
+                  {op.ajustado_minimo && (
+                    <p className="text-xs text-muted-foreground">
+                      ⓘ Ajustado al mínimo final configurado para este tipo de reparación.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             );
