@@ -29,7 +29,7 @@ function IlliaPage() {
   const [form, setForm] = useState({
     cliente: "", telefono: "", marca: "", modelo: "", tipo_reparacion: "Cambio de módulo", envio: 0,
   });
-  const [tiposReparacion, setTiposReparacion] = useState<{ tipo_reparacion: string; precio: number }[]>([]);
+  const [tiposReparacion, setTiposReparacion] = useState<{ tipo_reparacion: string; precio: number; minimo_final: number | null }[]>([]);
   const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [opciones, setOpciones] = useState<OpcionCalculada[]>([]);
@@ -38,14 +38,16 @@ function IlliaPage() {
   const [saved, setSaved] = useState<{ numero: number; id: string } | null>(null);
 
   useEffect(() => {
-    supabase.from("mano_obra").select("tipo_reparacion, precio").order("tipo_reparacion")
-      .then(({ data }) => setTiposReparacion(data || []));
+    supabase.from("mano_obra").select("tipo_reparacion, precio, minimo_final").order("tipo_reparacion")
+      .then(({ data }) => setTiposReparacion((data as any) || []));
   }, []);
 
-  const manoObraValor = useMemo(() => {
-    const m = tiposReparacion.find(t => t.tipo_reparacion === form.tipo_reparacion);
-    return Number(m?.precio) || 0;
-  }, [tiposReparacion, form.tipo_reparacion]);
+  const tipoActual = useMemo(
+    () => tiposReparacion.find(t => t.tipo_reparacion === form.tipo_reparacion),
+    [tiposReparacion, form.tipo_reparacion],
+  );
+  const manoObraValor = Number(tipoActual?.precio) || 0;
+  const minimoFinal = tipoActual?.minimo_final ?? null;
 
   const upd = (k: string, v: any) => { setForm(f => ({ ...f, [k]: v })); setOpciones([]); setSeleccionada(null); setSaved(null); };
 
@@ -55,17 +57,18 @@ function IlliaPage() {
     const { data, error } = await supabase.from("catalogo_repuestos")
       .select("*")
       .ilike("marca", `%${form.marca.trim()}%`)
-      .ilike("modelo", `%${form.modelo.trim()}%`)
-      .ilike("tipo_repuesto", `%${form.tipo_reparacion.trim()}%`);
+      .ilike("modelo", `%${form.modelo.trim()}%`);
     setBuscando(false);
     if (error) return toast.error(error.message);
-    setRepuestos(data || []);
+    setRepuestos((data as any) || []);
     if (!data || data.length === 0) { setOpciones([]); return toast.error("Sin coincidencias en catálogo"); }
-    const ops = data.map(r => calcularOpcion({
+    const ops = data.map((r: any) => calcularOpcion({
       proveedor: r.proveedor, calidad: r.calidad,
-      precioCatalogo: Number(r.precio),
+      precioProveedor: Number(r.precio_proveedor ?? r.precio),
+      precioCalculado: r.precio_calculado != null ? Number(r.precio_calculado) : undefined,
       manoObra: manoObraValor,
       envio: Number(form.envio) || 0,
+      minimoFinal,
       url_producto: r.url_producto,
       catalogo_id: r.id,
     }));
