@@ -201,8 +201,8 @@ function ManoObraTab() {
     toast.success("Creado"); setNuevo({ tipo_reparacion: "", precio: 0 }); load();
   };
 
-  const guardar = async (id: string, precio: number) => {
-    const { error } = await supabase.from("mano_obra").update({ precio }).eq("id", id);
+  const guardar = async (id: string, patch: { precio?: number; minimo_final?: number | null }) => {
+    const { error } = await supabase.from("mano_obra").update(patch).eq("id", id);
     if (error) return toast.error(error.message);
     toast.success("Actualizado");
   };
@@ -218,22 +218,120 @@ function ManoObraTab() {
     <Card>
       <CardHeader><CardTitle>Mano de Obra por tipo de reparación</CardTitle></CardHeader>
       <CardContent className="space-y-3">
-        <div className="grid grid-cols-1 sm:grid-cols-[1fr_160px_auto] gap-2">
-          <Input placeholder="Tipo de reparación (ej: Cambio de módulo)" value={nuevo.tipo_reparacion}
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_140px_auto] gap-2">
+          <Input placeholder="Tipo de reparación (ej: Módulo básico)" value={nuevo.tipo_reparacion}
             onChange={e => setNuevo({ ...nuevo, tipo_reparacion: e.target.value })} />
-          <Input type="number" placeholder="Precio mano de obra" value={nuevo.precio}
+          <Input type="number" placeholder="Mano de obra" value={nuevo.precio}
             onChange={e => setNuevo({ ...nuevo, precio: Number(e.target.value) })} />
           <Button onClick={crear}>Agregar</Button>
         </div>
         <div className="divide-y border rounded-md">
+          <div className="p-2 grid grid-cols-1 sm:grid-cols-[1fr_140px_140px_auto] gap-2 text-xs text-muted-foreground font-medium">
+            <div>Tipo</div><div>Mano de obra</div><div>Mín. final ($)</div><div></div>
+          </div>
           {items.map(m => (
-            <div key={m.id} className="p-3 grid grid-cols-1 sm:grid-cols-[1fr_160px_auto] gap-2 items-center">
+            <div key={m.id} className="p-3 grid grid-cols-1 sm:grid-cols-[1fr_140px_140px_auto] gap-2 items-center">
               <div className="font-medium">{m.tipo_reparacion}</div>
-              <Input type="number" defaultValue={m.precio} onBlur={e => guardar(m.id, Number(e.target.value))} />
+              <Input type="number" defaultValue={m.precio} onBlur={e => guardar(m.id, { precio: Number(e.target.value) })} />
+              <Input type="number" defaultValue={m.minimo_final ?? ""} placeholder="—"
+                onBlur={e => guardar(m.id, { minimo_final: e.target.value === "" ? null : Number(e.target.value) })} />
               <Button size="sm" variant="destructive" onClick={() => eliminar(m.id)}>Eliminar</Button>
             </div>
           ))}
           {items.length === 0 && <div className="p-4 text-sm text-muted-foreground text-center">Sin tipos cargados</div>}
+        </div>
+        <p className="text-xs text-muted-foreground">
+          El "mínimo final" se aplica al total del presupuesto (ej.: Pin de carga gama alta = $80.000).
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ProveedoresTab() {
+  const [items, setItems] = useState<any[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, any>>({});
+
+  const load = () => supabase.from("proveedores_config").select("*").order("nombre")
+    .then(({ data }) => { setItems(data || []); setDrafts({}); });
+  useEffect(() => { load(); }, []);
+
+  const setField = (id: string, k: string, v: any) =>
+    setDrafts(d => ({ ...d, [id]: { ...(d[id] || {}), [k]: v } }));
+
+  const guardar = async (row: any) => {
+    const patch = drafts[row.id] || {};
+    if (Object.keys(patch).length === 0) return;
+    // Si vino password en texto plano, guardarlo en password_encrypted (se almacena tal cual; el sitio NO lo expone al frontend para vendedores via RLS).
+    const update: any = { ...patch };
+    if ("password" in update) {
+      update.password_encrypted = update.password;
+      delete update.password;
+    }
+    if (update.url || update.usuario || update.password_encrypted) {
+      update.estado = "configurado";
+    }
+    const { error } = await supabase.from("proveedores_config").update(update).eq("id", row.id);
+    if (error) return toast.error(error.message);
+    toast.success(`${row.nombre} actualizado`); load();
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Credenciales de proveedores</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-muted-foreground">
+          Solo administradores pueden ver y modificar estas credenciales. Se usan para sincronizar precios
+          automáticamente desde cada proveedor.
+        </p>
+        {items.map(p => {
+          const d = drafts[p.id] || {};
+          return (
+            <div key={p.id} className="border rounded-md p-3 space-y-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="font-semibold">{p.nombre}</div>
+                <span className={`text-xs px-2 py-0.5 rounded ${
+                  p.estado === "configurado" ? "bg-success/15 text-success" :
+                  p.estado === "credenciales_faltantes" ? "bg-destructive/15 text-destructive" :
+                  "bg-muted text-muted-foreground"
+                }`}>
+                  {p.estado}
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div>
+                  <Label className="text-xs">URL</Label>
+                  <Input defaultValue={p.url || ""} onChange={e => setField(p.id, "url", e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Usuario</Label>
+                  <Input defaultValue={p.usuario || ""} onChange={e => setField(p.id, "usuario", e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Contraseña</Label>
+                  <Input type="password" placeholder={p.password_encrypted ? "•••• guardada" : ""}
+                    onChange={e => setField(p.id, "password", e.target.value)} />
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  Última sincronización: {p.ultima_sincronizacion
+                    ? new Date(p.ultima_sincronizacion).toLocaleString("es-AR")
+                    : "nunca"}
+                </span>
+                <Button size="sm" onClick={() => guardar(p)} disabled={Object.keys(d).length === 0}>
+                  Guardar
+                </Button>
+              </div>
+            </div>
+          );
+        })}
+        <div className="text-xs text-muted-foreground border-t pt-3">
+          <strong>Nota:</strong> La infraestructura está lista. Para activar la sincronización real
+          falta el conector HTTP con cada proveedor (endpoint o login + scraping del sitio).
+          Mientras tanto, las cargas manuales y los recargos siguen funcionando.
         </div>
       </CardContent>
     </Card>
