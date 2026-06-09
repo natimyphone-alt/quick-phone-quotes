@@ -30,11 +30,13 @@ function Configuracion() {
           <TabsTrigger value="usuarios">Usuarios</TabsTrigger>
           <TabsTrigger value="precios">Precios Soft</TabsTrigger>
           <TabsTrigger value="mano_obra">Mano de Obra</TabsTrigger>
+          <TabsTrigger value="proveedores">Proveedores</TabsTrigger>
         </TabsList>
         <TabsContent value="sucursales"><SucursalesTab /></TabsContent>
         <TabsContent value="usuarios"><UsuariosTab /></TabsContent>
         <TabsContent value="precios"><PreciosTab /></TabsContent>
         <TabsContent value="mano_obra"><ManoObraTab /></TabsContent>
+        <TabsContent value="proveedores"><ProveedoresTab /></TabsContent>
       </Tabs>
     </div>
   );
