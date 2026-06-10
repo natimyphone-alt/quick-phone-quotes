@@ -113,6 +113,11 @@ function Catalogo() {
     setEditId(null); load();
   };
 
+  const [syncStats, setSyncStats] = useState<{
+    total: number; processed: number; imported: number; updated: number; errors: number;
+    errorSamples: string[];
+  } | null>(null);
+
   const runSync = async (key: "patagonia" | "fv" | "todo") => {
     setSyncing(key);
     try {
@@ -120,8 +125,27 @@ function Catalogo() {
         const r = await syncPatagoniaFn();
         (r.ok ? toast.success : toast.message)(r.message);
       } else if (key === "fv") {
-        const r = await syncFVFn();
-        (r.ok ? toast.success : toast.message)(r.message);
+        setSyncStats({ total: 0, processed: 0, imported: 0, updated: 0, errors: 0, errorSamples: [] });
+        let offset = 0;
+        let totalImp = 0, totalUpd = 0, totalErr = 0, total = 0;
+        const samples: string[] = [];
+        for (let i = 0; i < 300; i++) {
+          const r = await syncFVFn({ data: { offset } });
+          if (!r.ok) { toast.error(r.message); break; }
+          totalImp += r.imported; totalUpd += r.updated; totalErr += r.errors;
+          total = r.totalDiscovered ?? total;
+          if (r.errorSamples) samples.push(...r.errorSamples);
+          setSyncStats({
+            total, processed: r.processed ?? offset,
+            imported: totalImp, updated: totalUpd, errors: totalErr,
+            errorSamples: samples.slice(0, 10),
+          });
+          if (r.done || r.nextOffset == null) {
+            toast.success(`FV Mayorista: +${totalImp} nuevos, ~${totalUpd} actualizados, ${totalErr} errores (${total} URLs).`);
+            break;
+          }
+          offset = r.nextOffset;
+        }
       } else {
         const rs = await syncTodoFn();
         rs.forEach(r => (r.ok ? toast.success : toast.message)(r.message));
