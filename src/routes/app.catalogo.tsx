@@ -113,6 +113,11 @@ function Catalogo() {
     setEditId(null); load();
   };
 
+  const [syncStats, setSyncStats] = useState<{
+    total: number; processed: number; imported: number; updated: number; errors: number;
+    errorSamples: string[];
+  } | null>(null);
+
   const runSync = async (key: "patagonia" | "fv" | "todo") => {
     setSyncing(key);
     try {
@@ -120,8 +125,27 @@ function Catalogo() {
         const r = await syncPatagoniaFn();
         (r.ok ? toast.success : toast.message)(r.message);
       } else if (key === "fv") {
-        const r = await syncFVFn();
-        (r.ok ? toast.success : toast.message)(r.message);
+        setSyncStats({ total: 0, processed: 0, imported: 0, updated: 0, errors: 0, errorSamples: [] });
+        let offset = 0;
+        let totalImp = 0, totalUpd = 0, totalErr = 0, total = 0;
+        const samples: string[] = [];
+        for (let i = 0; i < 300; i++) {
+          const r = await syncFVFn({ data: { offset } });
+          if (!r.ok) { toast.error(r.message); break; }
+          totalImp += r.imported; totalUpd += r.updated; totalErr += r.errors;
+          total = r.totalDiscovered ?? total;
+          if (r.errorSamples) samples.push(...r.errorSamples);
+          setSyncStats({
+            total, processed: r.processed ?? offset,
+            imported: totalImp, updated: totalUpd, errors: totalErr,
+            errorSamples: samples.slice(0, 10),
+          });
+          if (r.done || r.nextOffset == null) {
+            toast.success(`FV Mayorista: +${totalImp} nuevos, ~${totalUpd} actualizados, ${totalErr} errores (${total} URLs).`);
+            break;
+          }
+          offset = r.nextOffset;
+        }
       } else {
         const rs = await syncTodoFn();
         rs.forEach(r => (r.ok ? toast.success : toast.message)(r.message));
@@ -168,6 +192,34 @@ function Catalogo() {
               Sincronizar Todo
             </Button>
           </CardContent>
+          {syncStats && (
+            <CardContent className="pt-0">
+              <div className="text-sm border rounded-md p-3 bg-muted/30 space-y-1">
+                <div className="flex justify-between flex-wrap gap-2">
+                  <span><strong>Progreso FV:</strong> {syncStats.processed} / {syncStats.total || "…"} URLs</span>
+                  <span className="text-success">+{syncStats.imported} nuevos</span>
+                  <span className="text-primary">~{syncStats.updated} actualizados</span>
+                  <span className={syncStats.errors ? "text-destructive" : "text-muted-foreground"}>
+                    {syncStats.errors} errores
+                  </span>
+                </div>
+                {syncStats.total > 0 && (
+                  <div className="w-full h-2 bg-muted rounded overflow-hidden">
+                    <div className="h-full bg-primary transition-all"
+                      style={{ width: `${Math.min(100, (syncStats.processed / syncStats.total) * 100)}%` }} />
+                  </div>
+                )}
+                {syncStats.errorSamples.length > 0 && (
+                  <details className="text-xs text-muted-foreground">
+                    <summary className="cursor-pointer">Ver muestra de errores</summary>
+                    <ul className="list-disc pl-5 mt-1 space-y-0.5">
+                      {syncStats.errorSamples.map((e, i) => <li key={i} className="truncate">{e}</li>)}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            </CardContent>
+          )}
         </Card>
       )}
 
