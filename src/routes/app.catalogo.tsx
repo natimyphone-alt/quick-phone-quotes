@@ -192,6 +192,34 @@ function Catalogo() {
               Sincronizar Todo
             </Button>
           </CardContent>
+          {syncStats && (
+            <CardContent className="pt-0">
+              <div className="text-sm border rounded-md p-3 bg-muted/30 space-y-1">
+                <div className="flex justify-between flex-wrap gap-2">
+                  <span><strong>Progreso FV:</strong> {syncStats.processed} / {syncStats.total || "…"} URLs</span>
+                  <span className="text-success">+{syncStats.imported} nuevos</span>
+                  <span className="text-primary">~{syncStats.updated} actualizados</span>
+                  <span className={syncStats.errors ? "text-destructive" : "text-muted-foreground"}>
+                    {syncStats.errors} errores
+                  </span>
+                </div>
+                {syncStats.total > 0 && (
+                  <div className="w-full h-2 bg-muted rounded overflow-hidden">
+                    <div className="h-full bg-primary transition-all"
+                      style={{ width: `${Math.min(100, (syncStats.processed / syncStats.total) * 100)}%` }} />
+                  </div>
+                )}
+                {syncStats.errorSamples.length > 0 && (
+                  <details className="text-xs text-muted-foreground">
+                    <summary className="cursor-pointer">Ver muestra de errores</summary>
+                    <ul className="list-disc pl-5 mt-1 space-y-0.5">
+                      {syncStats.errorSamples.map((e, i) => <li key={i} className="truncate">{e}</li>)}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            </CardContent>
+          )}
         </Card>
       )}
 
