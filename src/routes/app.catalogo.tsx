@@ -175,7 +175,14 @@ function Catalogo() {
   return (
     <div className="space-y-4 max-w-5xl mx-auto">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-2xl font-bold">Catálogo de Repuestos</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Catálogo de Repuestos</h1>
+          <div className="text-sm text-muted-foreground mt-0.5">
+            <strong>{totalCount}</strong> productos cargados
+            {" • "}
+            Última sync FV: {fvLastSync ? new Date(fvLastSync).toLocaleString("es-AR") : "nunca"}
+          </div>
+        </div>
         {isAdmin && (
           <Button onClick={() => setCreando(c => !c)} size="lg">
             <Plus className="w-4 h-4 mr-1" />{creando ? "Cerrar" : "Nuevo"}
