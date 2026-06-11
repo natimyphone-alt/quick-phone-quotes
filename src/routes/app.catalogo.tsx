@@ -42,6 +42,8 @@ const VACIO = {
 function Catalogo() {
   const { isAdmin } = useAuth();
   const [items, setItems] = useState<Repuesto[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [fvLastSync, setFvLastSync] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [filtroProv, setFiltroProv] = useState<string>("todos");
   const [loading, setLoading] = useState(true);
@@ -57,11 +59,16 @@ function Catalogo() {
 
   const load = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from("catalogo_repuestos")
-      .select("*").order("marca").order("modelo").limit(500);
+    const [{ data, error }, countRes, cfgRes] = await Promise.all([
+      supabase.from("catalogo_repuestos").select("*").order("marca").order("modelo").limit(500),
+      supabase.from("catalogo_repuestos").select("*", { count: "exact", head: true }),
+      supabase.from("proveedores_config").select("ultima_sincronizacion").eq("nombre", "FV Mayorista").maybeSingle(),
+    ]);
     setLoading(false);
     if (error) return toast.error(error.message);
     setItems((data as any) || []);
+    setTotalCount(countRes.count ?? 0);
+    setFvLastSync((cfgRes.data as any)?.ultima_sincronizacion ?? null);
   };
   useEffect(() => { load(); }, []);
 
