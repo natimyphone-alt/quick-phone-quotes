@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,7 +13,7 @@ import { PROVEEDORES, calcularPrecioFinal, RECARGO_FV } from "@/lib/proveedores"
 import { formatARS } from "@/lib/calculos";
 import { toast } from "sonner";
 import { Plus, Trash2, ExternalLink, Search, Pencil, Save, X, RefreshCw } from "lucide-react";
-import { syncPatagonia, syncFV, syncTodo } from "@/lib/sync.functions";
+import { syncPatagonia, syncFV, syncTodo, getFVStatus, resetFVSync } from "@/lib/sync.functions";
 
 export const Route = createFileRoute("/app/catalogo")({
   component: Catalogo,
