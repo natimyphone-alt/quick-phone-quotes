@@ -133,20 +133,34 @@ function Catalogo() {
     errorSamples: string[];
   } | null>(null);
 
-  const runSync = async (key: "patagonia" | "fv" | "todo") => {
+  const runSync = async (key: "patagonia" | "fv" | "todo", opts: { resume?: boolean } = {}) => {
     setSyncing(key);
+    cancelRef.current = false;
     try {
       if (key === "patagonia") {
         const r = await syncPatagoniaFn();
         (r.ok ? toast.success : toast.message)(r.message);
       } else if (key === "fv") {
-        setSyncStats({ total: 0, processed: 0, imported: 0, updated: 0, errors: 0, errorSamples: [] });
-        let offset = 0;
+        let offset = opts.resume ? (Number(fvStatus?.last_offset) || 0) : 0;
+        if (!opts.resume && (fvStatus?.cargados ?? 0) > 0) {
+          // Empezar desde cero: reset metadata pero NO borrar productos (upsert los actualiza)
+          await resetFVSyncFn();
+        }
+        setSyncStats({ total: fvStatus?.total_discovered || 0, processed: offset, imported: 0, updated: 0, errors: 0, errorSamples: [] });
         let totalImp = 0, totalUpd = 0, totalErr = 0, total = 0;
         const samples: string[] = [];
-        for (let i = 0; i < 300; i++) {
+        for (let i = 0; i < 500; i++) {
+          if (cancelRef.current) {
+            toast.message(`Sincronización cancelada en offset ${offset}.`);
+            break;
+          }
           const r = await syncFVFn({ data: { offset } });
-          if (!r.ok) { toast.error(r.message); break; }
+          if (!r.ok) {
+            toast.error(r.message);
+            samples.unshift(r.message);
+            setSyncStats(s => s && { ...s, errorSamples: samples.slice(0, 10) });
+            break;
+          }
           totalImp += r.imported; totalUpd += r.updated; totalErr += r.errors;
           total = r.totalDiscovered ?? total;
           if (r.errorSamples) samples.push(...r.errorSamples);
@@ -172,6 +186,12 @@ function Catalogo() {
       setSyncing(null);
     }
   };
+
+  const cancelarSync = () => {
+    cancelRef.current = true;
+    toast.message("Cancelando después del lote actual…");
+  };
+
 
   const filtrados = items.filter(r => {
     if (filtroProv !== "todos" && r.proveedor !== filtroProv) return false;
