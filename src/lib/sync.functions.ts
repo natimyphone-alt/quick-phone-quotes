@@ -86,24 +86,29 @@ function modeloDesdeTitulo(titulo: string, marca: string): string {
   return m || titulo;
 }
 
-async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 3): Promise<Response> {
+async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 3, timeoutMs = 12000): Promise<Response> {
   let lastErr: unknown;
   for (let i = 0; i < retries; i++) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const res = await fetch(url, {
         ...opts,
+        signal: ctrl.signal,
         headers: {
           "User-Agent": "Mozilla/5.0 (compatible; MyPhoneHubBot/1.0)",
           Accept: "text/html,application/xhtml+xml,application/xml",
           ...(opts.headers || {}),
         },
       });
+      clearTimeout(t);
       if (res.status === 429 || res.status >= 500) {
         await new Promise((r) => setTimeout(r, 500 * (i + 1)));
         continue;
       }
       return res;
     } catch (e) {
+      clearTimeout(t);
       lastErr = e;
       await new Promise((r) => setTimeout(r, 500 * (i + 1)));
     }
