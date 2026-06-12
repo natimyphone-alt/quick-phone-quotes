@@ -220,19 +220,56 @@ function Catalogo() {
 
       {isAdmin && (
         <Card>
-          <CardContent className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <Button variant="outline" onClick={() => runSync("patagonia")} disabled={!!syncing}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "patagonia" ? "animate-spin" : ""}`} />
-              Sincronizar Patagonia Cell
-            </Button>
-            <Button variant="outline" onClick={() => runSync("fv")} disabled={!!syncing}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "fv" ? "animate-spin" : ""}`} />
-              Sincronizar FV Mayorista
-            </Button>
-            <Button onClick={() => runSync("todo")} disabled={!!syncing}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "todo" ? "animate-spin" : ""}`} />
-              Sincronizar Todo
-            </Button>
+          <CardContent className="p-3 space-y-3">
+            {fvStatus && (
+              <div className="text-xs border rounded-md p-2 bg-muted/30 space-y-0.5">
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <span><strong>FV estado:</strong> <Badge variant={fvStatus.estado === "error" ? "destructive" : "secondary"}>{fvStatus.estado}</Badge></span>
+                  <span><strong>Cargados:</strong> {fvStatus.cargados}</span>
+                  {fvStatus.total_discovered > 0 && <span><strong>Total URLs:</strong> {fvStatus.total_discovered}</span>}
+                  {fvStatus.last_offset > 0 && <span><strong>Último offset:</strong> {fvStatus.last_offset}</span>}
+                  {fvStatus.last_batch_at && <span><strong>Último lote:</strong> {new Date(fvStatus.last_batch_at).toLocaleString("es-AR")}</span>}
+                </div>
+                {fvStatus.last_error && <div className="text-destructive mt-1"><strong>Último error:</strong> {fvStatus.last_error}</div>}
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Button variant="outline" onClick={() => runSync("patagonia")} disabled={!!syncing}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "patagonia" ? "animate-spin" : ""}`} />
+                Sincronizar Patagonia Cell
+              </Button>
+              <Button variant="outline" onClick={() => runSync("fv")} disabled={!!syncing}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "fv" ? "animate-spin" : ""}`} />
+                Sincronizar FV Mayorista (desde 0)
+              </Button>
+              {fvStatus && fvStatus.last_offset > 0 && (
+                <Button onClick={() => runSync("fv", { resume: true })} disabled={!!syncing}>
+                  <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "fv" ? "animate-spin" : ""}`} />
+                  Reanudar FV (desde {fvStatus.last_offset})
+                </Button>
+              )}
+              {syncing === "fv" && (
+                <Button variant="destructive" onClick={cancelarSync}>
+                  <X className="w-4 h-4 mr-2" />
+                  Cancelar sincronización
+                </Button>
+              )}
+              <Button variant="ghost" onClick={() => setShowLogs(s => !s)}>
+                {showLogs ? "Ocultar logs" : "Ver logs"}
+              </Button>
+              <Button onClick={() => runSync("todo")} disabled={!!syncing}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "todo" ? "animate-spin" : ""}`} />
+                Sincronizar Todo
+              </Button>
+            </div>
+            {showLogs && fvStatus?.logs?.length > 0 && (
+              <div className="text-xs border rounded-md p-2 bg-muted/30 max-h-64 overflow-auto">
+                <div className="font-semibold mb-1">Logs FV ({fvStatus.logs.length}):</div>
+                <ul className="space-y-0.5 font-mono">
+                  {fvStatus.logs.map((l: string, i: number) => <li key={i} className="whitespace-pre-wrap break-all">{l}</li>)}
+                </ul>
+              </div>
+            )}
           </CardContent>
           {syncStats && (
             <CardContent className="pt-0">
