@@ -86,24 +86,29 @@ function modeloDesdeTitulo(titulo: string, marca: string): string {
   return m || titulo;
 }
 
-async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 3): Promise<Response> {
+async function fetchWithRetry(url: string, opts: RequestInit = {}, retries = 3, timeoutMs = 12000): Promise<Response> {
   let lastErr: unknown;
   for (let i = 0; i < retries; i++) {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
       const res = await fetch(url, {
         ...opts,
+        signal: ctrl.signal,
         headers: {
           "User-Agent": "Mozilla/5.0 (compatible; MyPhoneHubBot/1.0)",
           Accept: "text/html,application/xhtml+xml,application/xml",
           ...(opts.headers || {}),
         },
       });
+      clearTimeout(t);
       if (res.status === 429 || res.status >= 500) {
         await new Promise((r) => setTimeout(r, 500 * (i + 1)));
         continue;
       }
       return res;
     } catch (e) {
+      clearTimeout(t);
       lastErr = e;
       await new Promise((r) => setTimeout(r, 500 * (i + 1)));
     }
@@ -302,10 +307,20 @@ export const syncFV = createServerFn({ method: "POST" })
       const nextOffset = data.offset + slice.length;
       const done = nextOffset >= total;
 
+      const nuevoLog = `[${ahora}] lote ${data.offset}-${nextOffset}/${total}: +${imported} nuevos, ~${updated} actualizados, ${errores.length} errores`;
+      const notas = JSON.stringify({
+        last_offset: done ? 0 : nextOffset,
+        total_discovered: total,
+        last_batch_at: ahora,
+        last_error: null,
+        logs: [nuevoLog, ...errorSamples].slice(0, 50),
+      });
+
       await supabase.from("proveedores_config")
         .update({
           estado: done ? "sincronizado" : "sincronizando",
           ultima_sincronizacion: ahora,
+          notas,
         })
         .eq("nombre", proveedor);
 
@@ -325,15 +340,62 @@ export const syncFV = createServerFn({ method: "POST" })
           : `Lote ${data.offset}-${nextOffset} de ${total}: +${imported} nuevos, ~${updated} actualizados, ${errores.length} errores.`,
       };
     } catch (e: any) {
+      const errMsg = e?.message || String(e);
+      const notas = JSON.stringify({
+        last_offset: data.offset,
+        last_error: errMsg,
+        last_batch_at: ahora,
+        logs: [`[${ahora}] ERROR en offset ${data.offset}: ${errMsg}`],
+      });
       await supabase.from("proveedores_config")
-        .update({ estado: "error", ultima_sincronizacion: ahora })
+        .update({ estado: "error", ultima_sincronizacion: ahora, notas })
         .eq("nombre", proveedor);
       return {
         proveedor, ok: false, imported: 0, updated: 0, errors: 1,
-        message: `Error sincronizando FV Mayorista: ${e?.message || e}`,
+        nextOffset: data.offset,
+        message: `Error sincronizando FV Mayorista (offset ${data.offset}): ${errMsg}`,
       };
     }
   });
+
+export const getFVStatus = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase } = context;
+    const { data: cfg } = await supabase
+      .from("proveedores_config")
+      .select("estado, ultima_sincronizacion, notas")
+      .eq("nombre", "FV Mayorista")
+      .maybeSingle();
+    const { count } = await supabase
+      .from("catalogo_repuestos")
+      .select("*", { count: "exact", head: true })
+      .eq("proveedor", "FV Mayorista");
+    let parsed: any = {};
+    try { parsed = cfg?.notas ? JSON.parse(cfg.notas) : {}; } catch { parsed = {}; }
+    return {
+      estado: cfg?.estado ?? "no_configurado",
+      ultima_sincronizacion: cfg?.ultima_sincronizacion ?? null,
+      cargados: count ?? 0,
+      last_offset: Number(parsed.last_offset) || 0,
+      total_discovered: Number(parsed.total_discovered) || 0,
+      last_error: parsed.last_error ?? null,
+      last_batch_at: parsed.last_batch_at ?? null,
+      logs: Array.isArray(parsed.logs) ? parsed.logs : [],
+    };
+  });
+
+export const resetFVSync = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    await ensureAdmin(supabase, userId);
+    await supabase.from("proveedores_config")
+      .update({ estado: "no_configurado", notas: null })
+      .eq("nombre", "FV Mayorista");
+    return { ok: true };
+  });
+
 
 // ============ PATAGONIA CELL — pendiente conector real ============
 

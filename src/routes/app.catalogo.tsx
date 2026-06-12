@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
@@ -13,7 +13,7 @@ import { PROVEEDORES, calcularPrecioFinal, RECARGO_FV } from "@/lib/proveedores"
 import { formatARS } from "@/lib/calculos";
 import { toast } from "sonner";
 import { Plus, Trash2, ExternalLink, Search, Pencil, Save, X, RefreshCw } from "lucide-react";
-import { syncPatagonia, syncFV, syncTodo } from "@/lib/sync.functions";
+import { syncPatagonia, syncFV, syncTodo, getFVStatus, resetFVSync } from "@/lib/sync.functions";
 
 export const Route = createFileRoute("/app/catalogo")({
   component: Catalogo,
@@ -56,21 +56,29 @@ function Catalogo() {
   const syncPatagoniaFn = useServerFn(syncPatagonia);
   const syncFVFn = useServerFn(syncFV);
   const syncTodoFn = useServerFn(syncTodo);
+  const getFVStatusFn = useServerFn(getFVStatus);
+  const resetFVSyncFn = useServerFn(resetFVSync);
+
+  const [fvStatus, setFvStatus] = useState<any>(null);
+  const [showLogs, setShowLogs] = useState(false);
+  const cancelRef = useRef(false);
 
   const load = async () => {
     setLoading(true);
-    const [{ data, error }, countRes, cfgRes] = await Promise.all([
+    const [{ data, error }, countRes, cfgRes, statusRes] = await Promise.all([
       supabase.from("catalogo_repuestos").select("*").order("marca").order("modelo").limit(500),
       supabase.from("catalogo_repuestos").select("*", { count: "exact", head: true }),
       supabase.from("proveedores_config").select("ultima_sincronizacion").eq("nombre", "FV Mayorista").maybeSingle(),
+      isAdmin ? getFVStatusFn().catch(() => null) : Promise.resolve(null),
     ]);
     setLoading(false);
     if (error) return toast.error(error.message);
     setItems((data as any) || []);
     setTotalCount(countRes.count ?? 0);
     setFvLastSync((cfgRes.data as any)?.ultima_sincronizacion ?? null);
+    setFvStatus(statusRes);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [isAdmin]);
 
   const crear = async () => {
     if (!nuevo.marca.trim() || !nuevo.modelo.trim()) return toast.error("Marca y modelo requeridos");
@@ -125,20 +133,34 @@ function Catalogo() {
     errorSamples: string[];
   } | null>(null);
 
-  const runSync = async (key: "patagonia" | "fv" | "todo") => {
+  const runSync = async (key: "patagonia" | "fv" | "todo", opts: { resume?: boolean } = {}) => {
     setSyncing(key);
+    cancelRef.current = false;
     try {
       if (key === "patagonia") {
         const r = await syncPatagoniaFn();
         (r.ok ? toast.success : toast.message)(r.message);
       } else if (key === "fv") {
-        setSyncStats({ total: 0, processed: 0, imported: 0, updated: 0, errors: 0, errorSamples: [] });
-        let offset = 0;
+        let offset = opts.resume ? (Number(fvStatus?.last_offset) || 0) : 0;
+        if (!opts.resume && (fvStatus?.cargados ?? 0) > 0) {
+          // Empezar desde cero: reset metadata pero NO borrar productos (upsert los actualiza)
+          await resetFVSyncFn();
+        }
+        setSyncStats({ total: fvStatus?.total_discovered || 0, processed: offset, imported: 0, updated: 0, errors: 0, errorSamples: [] });
         let totalImp = 0, totalUpd = 0, totalErr = 0, total = 0;
         const samples: string[] = [];
-        for (let i = 0; i < 300; i++) {
+        for (let i = 0; i < 500; i++) {
+          if (cancelRef.current) {
+            toast.message(`Sincronización cancelada en offset ${offset}.`);
+            break;
+          }
           const r = await syncFVFn({ data: { offset } });
-          if (!r.ok) { toast.error(r.message); break; }
+          if (!r.ok) {
+            toast.error(r.message);
+            samples.unshift(r.message);
+            setSyncStats(s => s && { ...s, errorSamples: samples.slice(0, 10) });
+            break;
+          }
           totalImp += r.imported; totalUpd += r.updated; totalErr += r.errors;
           total = r.totalDiscovered ?? total;
           if (r.errorSamples) samples.push(...r.errorSamples);
@@ -164,6 +186,12 @@ function Catalogo() {
       setSyncing(null);
     }
   };
+
+  const cancelarSync = () => {
+    cancelRef.current = true;
+    toast.message("Cancelando después del lote actual…");
+  };
+
 
   const filtrados = items.filter(r => {
     if (filtroProv !== "todos" && r.proveedor !== filtroProv) return false;
@@ -192,19 +220,56 @@ function Catalogo() {
 
       {isAdmin && (
         <Card>
-          <CardContent className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
-            <Button variant="outline" onClick={() => runSync("patagonia")} disabled={!!syncing}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "patagonia" ? "animate-spin" : ""}`} />
-              Sincronizar Patagonia Cell
-            </Button>
-            <Button variant="outline" onClick={() => runSync("fv")} disabled={!!syncing}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "fv" ? "animate-spin" : ""}`} />
-              Sincronizar FV Mayorista
-            </Button>
-            <Button onClick={() => runSync("todo")} disabled={!!syncing}>
-              <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "todo" ? "animate-spin" : ""}`} />
-              Sincronizar Todo
-            </Button>
+          <CardContent className="p-3 space-y-3">
+            {fvStatus && (
+              <div className="text-xs border rounded-md p-2 bg-muted/30 space-y-0.5">
+                <div className="flex flex-wrap gap-x-4 gap-y-1">
+                  <span><strong>FV estado:</strong> <Badge variant={fvStatus.estado === "error" ? "destructive" : "secondary"}>{fvStatus.estado}</Badge></span>
+                  <span><strong>Cargados:</strong> {fvStatus.cargados}</span>
+                  {fvStatus.total_discovered > 0 && <span><strong>Total URLs:</strong> {fvStatus.total_discovered}</span>}
+                  {fvStatus.last_offset > 0 && <span><strong>Último offset:</strong> {fvStatus.last_offset}</span>}
+                  {fvStatus.last_batch_at && <span><strong>Último lote:</strong> {new Date(fvStatus.last_batch_at).toLocaleString("es-AR")}</span>}
+                </div>
+                {fvStatus.last_error && <div className="text-destructive mt-1"><strong>Último error:</strong> {fvStatus.last_error}</div>}
+              </div>
+            )}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Button variant="outline" onClick={() => runSync("patagonia")} disabled={!!syncing}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "patagonia" ? "animate-spin" : ""}`} />
+                Sincronizar Patagonia Cell
+              </Button>
+              <Button variant="outline" onClick={() => runSync("fv")} disabled={!!syncing}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "fv" ? "animate-spin" : ""}`} />
+                Sincronizar FV Mayorista (desde 0)
+              </Button>
+              {fvStatus && fvStatus.last_offset > 0 && (
+                <Button onClick={() => runSync("fv", { resume: true })} disabled={!!syncing}>
+                  <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "fv" ? "animate-spin" : ""}`} />
+                  Reanudar FV (desde {fvStatus.last_offset})
+                </Button>
+              )}
+              {syncing === "fv" && (
+                <Button variant="destructive" onClick={cancelarSync}>
+                  <X className="w-4 h-4 mr-2" />
+                  Cancelar sincronización
+                </Button>
+              )}
+              <Button variant="ghost" onClick={() => setShowLogs(s => !s)}>
+                {showLogs ? "Ocultar logs" : "Ver logs"}
+              </Button>
+              <Button onClick={() => runSync("todo")} disabled={!!syncing}>
+                <RefreshCw className={`w-4 h-4 mr-2 ${syncing === "todo" ? "animate-spin" : ""}`} />
+                Sincronizar Todo
+              </Button>
+            </div>
+            {showLogs && fvStatus?.logs?.length > 0 && (
+              <div className="text-xs border rounded-md p-2 bg-muted/30 max-h-64 overflow-auto">
+                <div className="font-semibold mb-1">Logs FV ({fvStatus.logs.length}):</div>
+                <ul className="space-y-0.5 font-mono">
+                  {fvStatus.logs.map((l: string, i: number) => <li key={i} className="whitespace-pre-wrap break-all">{l}</li>)}
+                </ul>
+              </div>
+            )}
           </CardContent>
           {syncStats && (
             <CardContent className="pt-0">
