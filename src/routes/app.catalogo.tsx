@@ -56,21 +56,29 @@ function Catalogo() {
   const syncPatagoniaFn = useServerFn(syncPatagonia);
   const syncFVFn = useServerFn(syncFV);
   const syncTodoFn = useServerFn(syncTodo);
+  const getFVStatusFn = useServerFn(getFVStatus);
+  const resetFVSyncFn = useServerFn(resetFVSync);
+
+  const [fvStatus, setFvStatus] = useState<any>(null);
+  const [showLogs, setShowLogs] = useState(false);
+  const cancelRef = useRef(false);
 
   const load = async () => {
     setLoading(true);
-    const [{ data, error }, countRes, cfgRes] = await Promise.all([
+    const [{ data, error }, countRes, cfgRes, statusRes] = await Promise.all([
       supabase.from("catalogo_repuestos").select("*").order("marca").order("modelo").limit(500),
       supabase.from("catalogo_repuestos").select("*", { count: "exact", head: true }),
       supabase.from("proveedores_config").select("ultima_sincronizacion").eq("nombre", "FV Mayorista").maybeSingle(),
+      isAdmin ? getFVStatusFn().catch(() => null) : Promise.resolve(null),
     ]);
     setLoading(false);
     if (error) return toast.error(error.message);
     setItems((data as any) || []);
     setTotalCount(countRes.count ?? 0);
     setFvLastSync((cfgRes.data as any)?.ultima_sincronizacion ?? null);
+    setFvStatus(statusRes);
   };
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [isAdmin]);
 
   const crear = async () => {
     if (!nuevo.marca.trim() || !nuevo.modelo.trim()) return toast.error("Marca y modelo requeridos");
