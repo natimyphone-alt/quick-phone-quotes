@@ -9,7 +9,7 @@ import { calcularSoft, formatARS, esSamsungSerieS, PRECIO_MINIMO_SERIE_S } from 
 import { descargarPDF } from "@/lib/pdf";
 import { buildMensajeWhatsApp, abrirWhatsApp } from "@/lib/whatsapp";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/scripts/sync-patagonia.mjs";
+import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
 import { FileDown, MessageCircle, Save, Calculator, AlertCircle } from "lucide-react";
 
