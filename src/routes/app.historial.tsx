@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { formatARS } from "@/lib/calculos";
 import { descargarPDF } from "@/lib/pdf";
 import { buildMensajeWhatsApp, abrirWhatsApp } from "@/lib/whatsapp";
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/hooks/scripts/sync-patagonia.mjs";
 import { toast } from "sonner";
 import { FileDown, MessageCircle, Search } from "lucide-react";
 

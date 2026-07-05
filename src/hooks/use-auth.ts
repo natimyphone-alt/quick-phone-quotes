@@ -18,21 +18,23 @@ export function useAuth(): AuthState {
   const [sucursalId, setSucursalId] = useState<string | null>(null);
   const [nombre, setNombre] = useState<string | null>(null);
 
-  const loadProfile = async (uid: string) => {
-    const [{ data: roleRows }, { data: prof }] = await Promise.all([
-      supabase.from("user_roles").select("role").eq("user_id", uid),
-      supabase.from("profiles").select("sucursal_id, nombre").eq("id", uid).maybeSingle(),
-    ]);
-    setIsAdmin((roleRows || []).some((r: any) => r.role === "admin"));
-    setSucursalId(prof?.sucursal_id ?? null);
-    setNombre(prof?.nombre ?? null);
+  const loadProfile = async (email: string) => {
+    const { data } = await supabase
+      .from("usuarios")
+      .select("rol, nombre, sucursal_id")
+      .eq("email", email)
+      .maybeSingle();
+
+    setIsAdmin(data?.rol === "administrador");
+    setSucursalId(data?.sucursal_id ? String(data.sucursal_id) : null);
+    setNombre(data?.nombre ?? null);
   };
 
   const refresh = async () => {
     const { data } = await supabase.auth.getSession();
     const u = data.session?.user ?? null;
     setUser(u);
-    if (u) await loadProfile(u.id);
+    if (u?.email) await loadProfile(u.email);
     setLoading(false);
   };
 
@@ -40,9 +42,11 @@ export function useAuth(): AuthState {
     const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
       const u = session?.user ?? null;
       setUser(u);
-      if (u) loadProfile(u.id);
+      if (u?.email) loadProfile(u.email);
       else {
-        setIsAdmin(false); setSucursalId(null); setNombre(null);
+        setIsAdmin(false);
+        setSucursalId(null);
+        setNombre(null);
       }
     });
     refresh();

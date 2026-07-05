@@ -8,6 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { formatARS } from "@/lib/calculos";
 import { calcularOpcion, OpcionCalculada } from "@/lib/proveedores";
+import { useServerFn } from "@tanstack/react-start";
+import { buscarPatagoniaCell } from "@/lib/sync.functions";
 import { descargarPDFMultiOpciones } from "@/lib/pdf";
 import { buildMensajeWhatsApp, abrirWhatsApp } from "@/lib/whatsapp";
 import { supabase } from "@/integrations/supabase/client";
@@ -24,13 +26,19 @@ interface Repuesto {
   tipo_repuesto: string; calidad: string | null; precio: number; url_producto: string | null;
 }
 
+interface TipoReparacion {
+  reparacion: string;
+  importe: number;
+}
+
 function IlliaPage() {
+  const buscarPCFn = useServerFn(buscarPatagoniaCell);
   const { user, sucursalId, nombre } = useAuth();
   const [form, setForm] = useState({
-    cliente: "", telefono: "", marca: "", modelo: "", tipo_reparacion: "Cambio de módulo", envio: 0,
+    cliente: "", telefono: "", marca: "", modelo: "",
+    tipo_reparacion: "", envio: 0,
   });
-  const [tiposReparacion, setTiposReparacion] = useState<{ tipo_reparacion: string; precio: number; minimo_final: number | null }[]>([]);
-  const [repuestos, setRepuestos] = useState<Repuesto[]>([]);
+  const [tiposReparacion, setTiposReparacion] = useState<TipoReparacion[]>([]);
   const [buscando, setBuscando] = useState(false);
   const [opciones, setOpciones] = useState<OpcionCalculada[]>([]);
   const [seleccionada, setSeleccionada] = useState<number | null>(null);
@@ -38,42 +46,96 @@ function IlliaPage() {
   const [saved, setSaved] = useState<{ numero: number; id: string } | null>(null);
 
   useEffect(() => {
-    supabase.from("mano_obra").select("tipo_reparacion, precio, minimo_final").order("tipo_reparacion")
+    supabase.from("mano_obra").select("reparacion, importe").order("reparacion")
       .then(({ data }) => setTiposReparacion((data as any) || []));
   }, []);
 
   const tipoActual = useMemo(
-    () => tiposReparacion.find(t => t.tipo_reparacion === form.tipo_reparacion),
+    () => tiposReparacion.find(t => t.reparacion === form.tipo_reparacion),
     [tiposReparacion, form.tipo_reparacion],
   );
-  const manoObraValor = Number(tipoActual?.precio) || 0;
-  const minimoFinal = tipoActual?.minimo_final ?? null;
+  const manoObraValor = Number(tipoActual?.importe) || 0;
 
-  const upd = (k: string, v: any) => { setForm(f => ({ ...f, [k]: v })); setOpciones([]); setSeleccionada(null); setSaved(null); };
+  const upd = (k: string, v: any) => {
+    setForm(f => ({ ...f, [k]: v }));
+    setOpciones([]);
+    setSeleccionada(null);
+    setSaved(null);
+  };
+
+  // Determinar qué tipo de repuesto buscar según el tipo de reparación
+  const tipoRepuestoFiltro = useMemo(() => {
+    const r = form.tipo_reparacion.toLowerCase();
+    if (r.includes("batería") || r.includes("bateria")) return "Batería";
+    if (r.includes("placa")) return "Placa de carga";
+    if (r.includes("módulo") || r.includes("modulo") || r.includes("iphone")) return "Módulo";
+    return null;
+  }, [form.tipo_reparacion]);
 
   const buscarRepuestos = async () => {
     if (!form.marca.trim() || !form.modelo.trim()) return toast.error("Ingresá marca y modelo");
+    if (!form.tipo_reparacion) return toast.error("Seleccioná el tipo de reparación");
     setBuscando(true);
-    const { data, error } = await supabase.from("catalogo_repuestos")
+
+    let queryFV = supabase.from("catalogo_repuestos")
       .select("*")
       .ilike("marca", `%${form.marca.trim()}%`)
-      .ilike("modelo", `%${form.modelo.trim()}%`);
+      .ilike("modelo", `%${form.modelo.trim()}%`)
+      .eq("stock", true);
+
+    if (tipoRepuestoFiltro) {
+      queryFV = queryFV.ilike("tipo_repuesto", `%${tipoRepuestoFiltro}%`);
+    }
+
+    const [fvResult, pcResult] = await Promise.all([
+      queryFV,
+      buscarPCFn({ data: { marca: form.marca.trim(), modelo: form.modelo.trim() } }).catch(() => null),
+    ]);
+
     setBuscando(false);
-    if (error) return toast.error(error.message);
-    setRepuestos((data as any) || []);
-    if (!data || data.length === 0) { setOpciones([]); return toast.error("Sin coincidencias en catálogo"); }
-    const ops = data.map((r: any) => calcularOpcion({
+
+    const fvData = fvResult.data || [];
+    const opsFV = fvData.map((r: any) => calcularOpcion({
       proveedor: r.proveedor, calidad: r.calidad,
       precioProveedor: Number(r.precio_proveedor ?? r.precio),
       precioCalculado: r.precio_calculado != null ? Number(r.precio_calculado) : undefined,
       manoObra: manoObraValor,
       envio: Number(form.envio) || 0,
-      minimoFinal,
+      minimoFinal: null,
       url_producto: r.url_producto,
       catalogo_id: r.id,
     }));
-    setOpciones(ops);
+
+    // Filtrar Patagonia Cell por tipo de reparación
+    const productosPC = (pcResult?.productos || []).filter((p: any) => {
+      if (!p.stock) return false;
+      if (!tipoRepuestoFiltro) return true;
+      const nombre = p.nombre.toLowerCase();
+      if (tipoRepuestoFiltro === "Batería") return nombre.includes("bater");
+      if (tipoRepuestoFiltro === "Módulo") return nombre.includes("módulo") || nombre.includes("modulo") || nombre.includes("pantalla");
+      if (tipoRepuestoFiltro === "Placa de carga") return nombre.includes("placa") || nombre.includes("carga");
+      return true;
+    });
+
+    const opsPC = productosPC.map((p: any) => calcularOpcion({
+      proveedor: "Patagonia Cell",
+      calidad: /oled/i.test(p.nombre) ? "OLED" : /incell/i.test(p.nombre) ? "Incell" : "Original",
+      precioProveedor: p.precio,
+      manoObra: manoObraValor,
+      envio: Number(form.envio) || 0,
+      minimoFinal: null,
+      url_producto: p.url,
+    }));
+
+    const todasOpciones = [...opsFV, ...opsPC];
+    setOpciones(todasOpciones);
     setSeleccionada(null);
+
+    if (todasOpciones.length === 0) {
+      toast.error("Sin coincidencias en ningún proveedor");
+    } else {
+      toast.success(`${todasOpciones.length} opciones encontradas`);
+    }
   };
 
   const guardar = async () => {
@@ -86,8 +148,7 @@ function IlliaPage() {
       cliente: form.cliente, telefono: form.telefono,
       marca: form.marca, modelo: form.modelo, reparacion: form.tipo_reparacion,
       costo: elegida.costo_repuesto + elegida.mano_obra,
-      ganancia: elegida.ganancia,
-      envio: elegida.envio,
+      ganancia: elegida.ganancia, envio: elegida.envio,
       subtotal: elegida.subtotal, iva: elegida.iva, total: elegida.total,
       sucursal_id: sucursalId, user_id: user.id,
     }).select("id, numero").single();
@@ -109,7 +170,6 @@ function IlliaPage() {
   const marcarSeleccion = async (idx: number) => {
     setSeleccionada(idx);
     if (saved) {
-      // Actualizar registro en DB
       const { data: ops } = await supabase.from("opciones_presupuesto")
         .select("id, proveedor, calidad").eq("presupuesto_id", saved.id);
       if (ops) {
@@ -137,9 +197,7 @@ function IlliaPage() {
       cliente: form.cliente, telefono: form.telefono,
       marca: form.marca, modelo: form.modelo,
       reparacion: form.tipo_reparacion,
-      opciones,
-      seleccionadaIdx: seleccionada,
-      usuario: nombre,
+      opciones, seleccionadaIdx: seleccionada, usuario: nombre,
     });
   };
 
@@ -157,14 +215,14 @@ function IlliaPage() {
       const lineas = opciones.map((o, i) =>
         `Opción ${i + 1}: ${o.proveedor} ${o.calidad || ""} — ${formatARS(o.total)}`
       ).join("\n");
-      msg = `Hola ${form.cliente}.\n\nPresupuesto para tu ${form.marca} ${form.modelo} (${form.tipo_reparacion}):\n\n${lineas}\n\nMuchas gracias.\nMyPhone Hub`;
+      msg = `Hola ${form.cliente}.\n\nPresupuesto para tu ${form.marca} ${form.modelo} (${form.tipo_reparacion}):\n\n${lineas}\n\nMuchas gracias.\nMyPhone`;
     }
     abrirWhatsApp(form.telefono, msg);
   };
 
   return (
     <div className="space-y-4 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold">Presupuesto Illia</h1>
+      <h1 className="text-2xl font-bold">Presupuesto</h1>
 
       <Card>
         <CardHeader><CardTitle>Datos del equipo</CardTitle></CardHeader>
@@ -173,13 +231,13 @@ function IlliaPage() {
           <Field label="Teléfono"><Input value={form.telefono} onChange={e => upd("telefono", e.target.value)} /></Field>
           <Field label="Marca *"><Input value={form.marca} onChange={e => upd("marca", e.target.value)} placeholder="Samsung" /></Field>
           <Field label="Modelo *"><Input value={form.modelo} onChange={e => upd("modelo", e.target.value)} placeholder="A15" /></Field>
-          <Field label="Tipo de reparación" full>
+          <Field label="Tipo de reparación *" full>
             <Select value={form.tipo_reparacion} onValueChange={v => upd("tipo_reparacion", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger><SelectValue placeholder="Seleccioná el tipo de reparación" /></SelectTrigger>
               <SelectContent>
                 {tiposReparacion.map(t => (
-                  <SelectItem key={t.tipo_reparacion} value={t.tipo_reparacion}>
-                    {t.tipo_reparacion} — m.o. {formatARS(Number(t.precio))}
+                  <SelectItem key={t.reparacion} value={t.reparacion}>
+                    {t.reparacion} — m.o. {formatARS(Number(t.importe))}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -206,6 +264,11 @@ function IlliaPage() {
                     <div>
                       <div className="font-semibold">Opción {i + 1}: {op.proveedor}</div>
                       {op.calidad && <Badge className="mt-1">{op.calidad}</Badge>}
+                      {op.url_producto && (
+                        <a href={op.url_producto} target="_blank" rel="noreferrer" className="block text-xs text-primary underline mt-1">
+                          Ver producto
+                        </a>
+                      )}
                     </div>
                     <Button size="sm" variant={elegida ? "default" : "outline"} onClick={() => marcarSeleccion(i)}>
                       {elegida ? <><Check className="w-4 h-4 mr-1" />Elegida</> : "Cliente elige esta"}
@@ -221,20 +284,19 @@ function IlliaPage() {
                   <div className="flex justify-between bg-primary text-primary-foreground rounded-md p-3 font-bold">
                     <span>TOTAL</span><span>{formatARS(op.total)}</span>
                   </div>
-                  {op.ajustado_minimo && (
-                    <p className="text-xs text-muted-foreground">
-                      ⓘ Ajustado al mínimo final configurado para este tipo de reparación.
-                    </p>
-                  )}
                 </CardContent>
               </Card>
             );
           })}
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
-            <Button onClick={guardar} disabled={saving || !!saved} size="lg"><Save className="w-4 h-4 mr-2" />{saved ? `Guardado N° ${saved.numero}` : "Guardar"}</Button>
+            <Button onClick={guardar} disabled={saving || !!saved} size="lg">
+              <Save className="w-4 h-4 mr-2" />{saved ? `Guardado N° ${saved.numero}` : "Guardar"}
+            </Button>
             <Button onClick={pdf} variant="secondary" size="lg"><FileDown className="w-4 h-4 mr-2" />PDF</Button>
-            <Button onClick={whatsapp} size="lg" className="bg-success text-success-foreground hover:opacity-90"><MessageCircle className="w-4 h-4 mr-2" />WhatsApp</Button>
+            <Button onClick={whatsapp} size="lg" className="bg-success text-success-foreground hover:opacity-90">
+              <MessageCircle className="w-4 h-4 mr-2" />WhatsApp
+            </Button>
           </div>
         </div>
       )}
