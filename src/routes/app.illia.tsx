@@ -87,10 +87,10 @@ function IlliaPage() {
       queryFV = queryFV.ilike("tipo_repuesto", `%${tipoRepuestoFiltro}%`);
     }
 
-    const [fvResult, pcResult] = await Promise.all([
-      queryFV,
-      buscarPCFn({ data: { marca: form.marca.trim(), modelo: form.modelo.trim() } }).catch(() => null),
-    ]);
+    const [fvResult] = await Promise.all([
+  queryFV,
+]);
+const pcResult = null;
 
     setBuscando(false);
 
