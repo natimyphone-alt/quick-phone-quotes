@@ -8,8 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { formatARS } from "@/lib/calculos";
 import { calcularOpcion, OpcionCalculada } from "@/lib/proveedores";
-import { useServerFn } from "@tanstack/react-start";
-import { buscarPatagoniaCell } from "@/lib/sync.functions";
 import { descargarPDFMultiOpciones } from "@/lib/pdf";
 import { buildMensajeWhatsApp, abrirWhatsApp } from "@/lib/whatsapp";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,18 +19,59 @@ export const Route = createFileRoute("/app/illia")({
   component: IlliaPage,
 });
 
-interface Repuesto {
-  id: string; proveedor: string; marca: string; modelo: string;
-  tipo_repuesto: string; calidad: string | null; precio: number; url_producto: string | null;
-}
-
 interface TipoReparacion {
   reparacion: string;
   importe: number;
 }
 
+interface PCProducto {
+  nombre: string;
+  precio: number;
+  url: string;
+  stock: boolean;
+}
+
+const PC_BASE = "https://neuquenpatagoniacell.com.ar";
+
+async function buscarEnPatagoniaCell(marca: string, modelo: string): Promise<PCProducto[]> {
+  try {
+    const query = `${marca} ${modelo}`.trim();
+    const url = `${PC_BASE}/search/?q=${encodeURIComponent(query)}`;
+    const res = await fetch(url, {
+      headers: { Accept: "text/html" },
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+
+    const productos: PCProducto[] = [];
+    const vistos = new Set<string>();
+    const bloqueRe = /data-variants="([^"]+)"[\s\S]{0,3000}?href="(https?:\/\/[^"]+\/productos\/[^"]+)"[^>]*title="([^"]+)"/g;
+    let m: RegExpExecArray | null;
+
+    while ((m = bloqueRe.exec(html)) !== null) {
+      const url = m[2];
+      if (vistos.has(url)) continue;
+      vistos.add(url);
+      const nombre = m[3].replace(/&amp;/g, "&").replace(/&quot;/g, '"').trim();
+      let variants: any[] = [];
+      try {
+        const decoded = m[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#39;/g, "'");
+        variants = JSON.parse(decoded);
+      } catch { continue; }
+      if (!variants.length) continue;
+      const v = variants[0];
+      const precio = Number(v.price_number) || 0;
+      if (precio <= 0) continue;
+      const stock = v.available === true && (v.stock === null || Number(v.stock) > 0);
+      productos.push({ nombre, precio, url, stock });
+    }
+    return productos;
+  } catch {
+    return [];
+  }
+}
+
 function IlliaPage() {
-  const buscarPCFn = useServerFn(buscarPatagoniaCell);
   const { user, sucursalId, nombre } = useAuth();
   const [form, setForm] = useState({
     cliente: "", telefono: "", marca: "", modelo: "",
@@ -63,13 +102,11 @@ function IlliaPage() {
     setSaved(null);
   };
 
-  // Determinar qué tipo de repuesto buscar según el tipo de reparación
   const tipoRepuestoFiltro = useMemo(() => {
     const r = form.tipo_reparacion.toLowerCase();
     if (r.includes("batería") || r.includes("bateria")) return "Batería";
-    if (r.includes("placa")) return "Placa de carga";
-    if (r.includes("módulo") || r.includes("modulo") || r.includes("iphone")) return "Módulo";
-    return null;
+    if (r.includes("placa") || r.includes("pin")) return "Placa de carga";
+    return "Módulo";
   }, [form.tipo_reparacion]);
 
   const buscarRepuestos = async () => {
@@ -81,16 +118,13 @@ function IlliaPage() {
       .select("*")
       .ilike("marca", `%${form.marca.trim()}%`)
       .ilike("modelo", `%${form.modelo.trim()}%`)
-      .eq("stock", true);
+      .eq("stock", true)
+      .ilike("tipo_repuesto", `%${tipoRepuestoFiltro}%`);
 
-    if (tipoRepuestoFiltro) {
-      queryFV = queryFV.ilike("tipo_repuesto", `%${tipoRepuestoFiltro}%`);
-    }
-
-    const [fvResult] = await Promise.all([
-  queryFV,
-]);
-const pcResult = null;
+    const [fvResult, pcProductos] = await Promise.all([
+      queryFV,
+      buscarEnPatagoniaCell(form.marca.trim(), form.modelo.trim()),
+    ]);
 
     setBuscando(false);
 
@@ -106,20 +140,17 @@ const pcResult = null;
       catalogo_id: r.id,
     }));
 
-    // Filtrar Patagonia Cell por tipo de reparación
-    const productosPC = (pcResult?.productos || []).filter((p: any) => {
+    const productospcFiltrados = pcProductos.filter(p => {
       if (!p.stock) return false;
-      if (!tipoRepuestoFiltro) return true;
-      const nombre = p.nombre.toLowerCase();
-      if (tipoRepuestoFiltro === "Batería") return nombre.includes("bater");
-      if (tipoRepuestoFiltro === "Módulo") return nombre.includes("módulo") || nombre.includes("modulo") || nombre.includes("pantalla");
-      if (tipoRepuestoFiltro === "Placa de carga") return nombre.includes("placa") || nombre.includes("carga");
-      return true;
+      const n = p.nombre.toLowerCase();
+      if (tipoRepuestoFiltro === "Batería") return n.includes("bater");
+      if (tipoRepuestoFiltro === "Placa de carga") return n.includes("placa") || n.includes("carga");
+      return n.includes("módulo") || n.includes("modulo") || n.includes("pantalla") || n.includes("service pack");
     });
 
-    const opsPC = productosPC.map((p: any) => calcularOpcion({
+    const opsPC = productospcFiltrados.map(p => calcularOpcion({
       proveedor: "Patagonia Cell",
-      calidad: /oled/i.test(p.nombre) ? "OLED" : /incell/i.test(p.nombre) ? "Incell" : "Original",
+      calidad: /oled/i.test(p.nombre) ? "OLED" : /incell/i.test(p.nombre) ? "Incell" : /service pack/i.test(p.nombre) ? "Service Pack" : "Original",
       precioProveedor: p.precio,
       manoObra: manoObraValor,
       envio: Number(form.envio) || 0,

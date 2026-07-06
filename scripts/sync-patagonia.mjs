@@ -6,12 +6,28 @@ const SUPABASE_KEY = "sb_publishable_NCdzO3zzGgwKfvykdTtigA_HZjKeMiv";
 const PC_BASE = "https://neuquenpatagoniacell.com.ar";
 
 const CATEGORIAS = [
-  { url: `${PC_BASE}/pantallas-modulos/samsung/`, marca: "Samsung", tipo: "Módulo" },
-  { url: `${PC_BASE}/pantallas-modulos/motorola/`, marca: "Motorola", tipo: "Módulo" },
-  { url: `${PC_BASE}/pantallas-modulos/iphone/`, marca: "iPhone", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/samsung/galaxy-a/`, marca: "Samsung", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/samsung/galaxy-j/`, marca: "Samsung", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/samsung/galaxy-s/`, marca: "Samsung", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/motorola/moto-e/`, marca: "Motorola", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/motorola/moto-g/`, marca: "Motorola", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/motorola/moto-one/`, marca: "Motorola", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/motorola/moto-edge/`, marca: "Motorola", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/iphone/11-11-pro-11-pro-max/`, marca: "iPhone", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/iphone/12-12-pro-12-pro-max/`, marca: "iPhone", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/iphone/13-13-pro-13-pro-max/`, marca: "iPhone", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/iphone/14-14-pro-14-pro-max/`, marca: "iPhone", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/iphone/15-15-pro-15-pro-max/`, marca: "iPhone", tipo: "Módulo" },
   { url: `${PC_BASE}/pantallas-modulos/xiaomi/`, marca: "Xiaomi", tipo: "Módulo" },
-  { url: `${PC_BASE}/baterias/samsung/`, marca: "Samsung", tipo: "Batería" },
-  { url: `${PC_BASE}/baterias/motorola/`, marca: "Motorola", tipo: "Batería" },
+  { url: `${PC_BASE}/pantallas-modulos/lg/`, marca: "LG", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/huawei/`, marca: "Huawei", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/alcatel/`, marca: "Alcatel", tipo: "Módulo" },
+  { url: `${PC_BASE}/pantallas-modulos/service-pack-100-original/`, marca: "Samsung", tipo: "Módulo" },
+  { url: `${PC_BASE}/baterias3/baterias-iphone1/`, marca: "iPhone", tipo: "Batería" },
+  { url: `${PC_BASE}/baterias3/baterias-samsung/`, marca: "Samsung", tipo: "Batería" },
+  { url: `${PC_BASE}/baterias3/baterias-motorola/`, marca: "Motorola", tipo: "Batería" },
+  { url: `${PC_BASE}/baterias3/baterias-xiaomi1/`, marca: "Xiaomi", tipo: "Batería" },
+  { url: `${PC_BASE}/baterias3/baterias-lg1/`, marca: "LG", tipo: "Batería" },
 ];
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -36,15 +52,47 @@ function parsearProductos(html, marca, tipo) {
     const precio = Number(v.price_number) || 0;
     if (precio <= 0) continue;
     const stock = v.available === true && (v.stock === null || Number(v.stock) > 0);
-    const calidad = /oled/i.test(nombre) ? "OLED" : /incell/i.test(nombre) ? "Incell" : "Original";
+    const calidad = /oled/i.test(nombre) ? "OLED" : /incell/i.test(nombre) ? "Incell" : /service.?pack/i.test(nombre) ? "Service Pack" : "Original";
     productos.push({ nombre, precio, url, stock, calidad });
   }
   return productos;
 }
 
+async function obtenerTodasLasPaginas(page, urlBase, marca, tipo) {
+  const todos = [];
+  const vistos = new Set();
+  let paginaActual = 1;
+
+  while (paginaActual <= 15) {
+    const url = paginaActual === 1 ? urlBase : `${urlBase}?page=${paginaActual}`;
+    console.log(`    Página ${paginaActual}: ${url}`);
+    try {
+      await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+      const html = await page.content();
+      const productos = parsearProductos(html, marca, tipo);
+      
+      // Filtrar duplicados
+      const nuevos = productos.filter(p => !vistos.has(p.url));
+      nuevos.forEach(p => vistos.add(p.url));
+      
+      if (nuevos.length === 0) break;
+      todos.push(...nuevos);
+      paginaActual++;
+      await new Promise(r => setTimeout(r, 800));
+    } catch (e) {
+      console.error(`    Error en página ${paginaActual}:`, e.message);
+      break;
+    }
+  }
+  return todos;
+}
+
 async function sincronizar() {
-  console.log("Iniciando sincronización Patagonia Cell...");
-  const browser = await puppeteer.launch({ headless: true, args: ["--no-sandbox"] });
+  console.log("Iniciando sincronización Patagonia Cell...\n");
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
   const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36");
 
@@ -52,17 +100,16 @@ async function sincronizar() {
   const ahora = new Date().toISOString();
 
   for (const cat of CATEGORIAS) {
-    console.log(`Procesando ${cat.marca} ${cat.tipo}...`);
+    console.log(`Procesando ${cat.marca} ${cat.tipo} - ${cat.url}`);
     try {
-      await page.goto(cat.url, { waitUntil: "networkidle2", timeout: 30000 });
-      const html = await page.content();
-      const productos = parsearProductos(html, cat.marca, cat.tipo);
-      console.log(`  → ${productos.length} productos encontrados`);
+      const productos = await obtenerTodasLasPaginas(page, cat.url, cat.marca, cat.tipo);
+      console.log(`  → ${productos.length} productos encontrados\n`);
 
       for (const p of productos) {
         const modelo = p.nombre
-          .replace(/^(Módulo|Modulo|Batería|Bateria)\s+/i, "")
+          .replace(/^(Módulo|Modulo|Batería|Bateria|Pantalla)\s+/i, "")
           .replace(new RegExp(`^${cat.marca}\\s+`, "i"), "")
+          .replace(/\s*[-–]\s*(OLED|INCELL|Original|SERVICE PACK|Calidad).*$/i, "")
           .trim() || p.nombre;
 
         const { data: existing } = await supabase
@@ -74,8 +121,7 @@ async function sincronizar() {
 
         const row = {
           proveedor: "Patagonia Cell",
-          marca: cat.marca,
-          modelo,
+          marca: cat.marca, modelo,
           tipo_repuesto: cat.tipo,
           calidad: p.calidad,
           precio: p.precio,
