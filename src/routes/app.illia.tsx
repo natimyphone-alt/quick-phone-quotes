@@ -1,18 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatARS, calcularManoObra } from "@/lib/calculos";
+import { formatARS, calcularManoObraAndroid, calcularManoObraIphone } from "@/lib/calculos";
 import { calcularOpcion, OpcionCalculada, ENVIO_PATAGONIA, ENVIO_FV } from "@/lib/proveedores";
 import { descargarPDFMultiOpciones } from "@/lib/pdf";
 import { buildMensajeWhatsApp, abrirWhatsApp } from "@/lib/whatsapp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { FileDown, MessageCircle, Save, Search, Check } from "lucide-react";
+import { FileDown, MessageCircle, Save, Search, Check, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/app/illia")({
   component: IlliaPage,
@@ -20,48 +20,71 @@ export const Route = createFileRoute("/app/illia")({
 
 type TipoReparacion = "Módulo" | "Batería" | "Placa de carga";
 
+async function buscarPrecioMercado(marca: string, modelo: string): Promise<number> {
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 100,
+        messages: [{
+          role: "user",
+          content: `¿Cuál es el precio de venta aproximado en pesos argentinos del ${marca} ${modelo} en julio 2026 en Argentina? Respondé SOLO con el número sin puntos ni comas ni símbolo $. Por ejemplo: 350000`,
+        }],
+      }),
+    });
+    const data = await response.json();
+    const texto = data.content?.[0]?.text?.trim() || "0";
+    const numero = parseInt(texto.replace(/\D/g, ""), 10);
+    return isNaN(numero) ? 0 : numero;
+  } catch {
+    return 0;
+  }
+}
+
 function IlliaPage() {
   const { user, sucursalId, nombre } = useAuth();
   const [form, setForm] = useState({
-    cliente: "",
-    telefono: "",
     marca: "",
     modelo: "",
-    precio_venta: "",
     tipo_reparacion: "Módulo" as TipoReparacion,
+    con_ic: false,
   });
   const [buscando, setBuscando] = useState(false);
   const [opciones, setOpciones] = useState<OpcionCalculada[]>([]);
   const [seleccionada, setSeleccionada] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState<{ numero: number; id: string } | null>(null);
+  const [precioMercado, setPrecioMercado] = useState<number>(0);
+
+  const esIphone = form.marca.toLowerCase().includes("iphone") || form.marca.toLowerCase().includes("apple");
 
   const upd = (k: string, v: any) => {
     setForm(f => ({ ...f, [k]: v }));
     setOpciones([]);
     setSeleccionada(null);
     setSaved(null);
+    setPrecioMercado(0);
   };
 
-  const buscarRepuestos = async () => {
+  const buscarRepuestos = useCallback(async () => {
     if (!form.marca.trim() || !form.modelo.trim()) return toast.error("Ingresá marca y modelo");
-    if (!form.precio_venta || Number(form.precio_venta) <= 0) return toast.error("Ingresá el precio de venta del celular");
 
     setBuscando(true);
+    toast.info("Buscando precio de mercado...");
 
-    const modelo = form.modelo.trim().toUpperCase();
-    const marca = form.marca.trim();
-    const tipo = form.tipo_reparacion;
-    const precioVenta = Number(form.precio_venta);
-    const manoObra = calcularManoObra(precioVenta);
-
-    const { data, error } = await supabase.rpc("buscar_modelo_exacto", {
-      p_marca: marca,
-      p_modelo: modelo,
-      p_tipo: tipo,
-    });
+    const [{ data, error }, precioVenta] = await Promise.all([
+      supabase.rpc("buscar_modelo_exacto", {
+        p_marca: form.marca.trim(),
+        p_modelo: form.modelo.trim().toUpperCase(),
+        p_tipo: form.tipo_reparacion,
+      }),
+      buscarPrecioMercado(form.marca.trim(), form.modelo.trim()),
+    ]);
 
     setBuscando(false);
+    setPrecioMercado(precioVenta);
 
     if (error) { toast.error(error.message); return; }
 
@@ -74,6 +97,10 @@ function IlliaPage() {
     const ops = resultados.map((r: any) => {
       const precioRepuesto = Number(r.precio_calculado ?? r.precio_proveedor ?? r.precio);
       const envio = r.proveedor === "Patagonia Cell" ? ENVIO_PATAGONIA : ENVIO_FV;
+      const manoObra = esIphone
+        ? calcularManoObraIphone(form.modelo, form.con_ic)
+        : calcularManoObraAndroid(precioVenta);
+
       return calcularOpcion({
         proveedor: r.proveedor,
         calidad: r.calidad,
@@ -87,17 +114,16 @@ function IlliaPage() {
 
     setOpciones(ops);
     setSeleccionada(null);
-    toast.success(`${ops.length} opciones encontradas`);
-  };
+    toast.success(`${ops.length} opciones encontradas${precioVenta > 0 ? ` · Precio mercado: ${formatARS(precioVenta)}` : ""}`);
+  }, [form, esIphone]);
 
   const guardar = async () => {
     if (opciones.length === 0 || !user) return;
-    if (!form.cliente.trim()) return toast.error("Ingresá el cliente");
     setSaving(true);
     const elegida = seleccionada !== null ? opciones[seleccionada] : opciones[0];
     const { data: presu, error } = await supabase.from("presupuestos").insert({
       tipo: "illia",
-      cliente: form.cliente, telefono: form.telefono,
+      cliente: "-", telefono: "-",
       marca: form.marca, modelo: form.modelo, reparacion: form.tipo_reparacion,
       costo: elegida.costo_repuesto + elegida.mano_obra,
       ganancia: elegida.ganancia, envio: elegida.envio,
@@ -135,7 +161,6 @@ function IlliaPage() {
             ganancia: target.ganancia, envio: target.envio,
             subtotal: target.subtotal, iva: target.iva, total: target.total,
           }).eq("id", saved.id);
-          toast.success("Opción seleccionada actualizada");
         }
       }
     }
@@ -146,7 +171,7 @@ function IlliaPage() {
     descargarPDFMultiOpciones({
       numero: saved?.numero ?? 0,
       fecha: new Date().toLocaleString("es-AR"),
-      cliente: form.cliente, telefono: form.telefono,
+      cliente: "-", telefono: "-",
       marca: form.marca, modelo: form.modelo,
       reparacion: form.tipo_reparacion,
       opciones, seleccionadaIdx: seleccionada, usuario: nombre,
@@ -159,7 +184,7 @@ function IlliaPage() {
     let msg: string;
     if (elegida) {
       msg = buildMensajeWhatsApp({
-        cliente: form.cliente, marca: form.marca, modelo: form.modelo,
+        cliente: "", marca: form.marca, modelo: form.modelo,
         reparacion: `${form.tipo_reparacion} (${elegida.proveedor} ${elegida.calidad || ""})`,
         total: elegida.total,
       });
@@ -167,9 +192,9 @@ function IlliaPage() {
       const lineas = opciones.map((o, i) =>
         `Opción ${i + 1}: ${o.proveedor} ${o.calidad || ""} — ${formatARS(o.total)}`
       ).join("\n");
-      msg = `Hola ${form.cliente}.\n\nPresupuesto para tu ${form.marca} ${form.modelo} (${form.tipo_reparacion}):\n\n${lineas}\n\nMuchas gracias.\nMyPhone`;
+      msg = `Presupuesto ${form.marca} ${form.modelo} (${form.tipo_reparacion}):\n\n${lineas}\n\nMuchas gracias.\nMyPhone`;
     }
-    abrirWhatsApp(form.telefono, msg);
+    abrirWhatsApp("", msg);
   };
 
   return (
@@ -179,54 +204,59 @@ function IlliaPage() {
       <Card>
         <CardHeader><CardTitle>Datos del equipo</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Field label="Cliente *">
-            <Input value={form.cliente} onChange={e => upd("cliente", e.target.value)} />
-          </Field>
-          <Field label="Teléfono">
-            <Input value={form.telefono} onChange={e => upd("telefono", e.target.value)} />
-          </Field>
           <Field label="Marca *">
             <Input value={form.marca} onChange={e => upd("marca", e.target.value)} placeholder="Samsung" />
           </Field>
           <Field label="Modelo *">
             <Input value={form.modelo} onChange={e => upd("modelo", e.target.value)} placeholder="A15" />
           </Field>
-          <Field label="Precio de venta del celular *">
-            <Input
-              type="number"
-              value={form.precio_venta}
-              onChange={e => upd("precio_venta", e.target.value)}
-              placeholder="350000"
-            />
-          </Field>
-          <Field label="Tipo de reparación *">
+          <Field label="Tipo de reparación *" full>
             <div className="flex gap-2">
               {(["Módulo", "Batería", "Placa de carga"] as TipoReparacion[]).map(t => (
-                <button
-                  key={t}
-                  onClick={() => upd("tipo_reparacion", t)}
+                <button key={t} onClick={() => upd("tipo_reparacion", t)}
                   className={`flex-1 py-2 px-2 rounded-md text-sm font-medium border transition-colors ${
                     form.tipo_reparacion === t
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-background border-input hover:bg-accent"
-                  }`}
-                >
+                  }`}>
                   {t}
                 </button>
               ))}
             </div>
           </Field>
+          {esIphone && (
+            <Field label="Tipo de cambio iPhone *" full>
+              <div className="flex gap-2">
+                {[{ label: "Sin IC", value: false }, { label: "Con IC", value: true }].map(opt => (
+                  <button key={String(opt.value)} onClick={() => upd("con_ic", opt.value)}
+                    className={`flex-1 py-2 px-3 rounded-md text-sm font-medium border transition-colors ${
+                      form.con_ic === opt.value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background border-input hover:bg-accent"
+                    }`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
           <div className="sm:col-span-2">
             <Button onClick={buscarRepuestos} disabled={buscando} className="w-full h-11" size="lg">
-              <Search className="w-4 h-4 mr-2" />{buscando ? "Buscando..." : "Buscar opciones"}
+              {buscando ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Buscando...</> : <><Search className="w-4 h-4 mr-2" />Buscar opciones</>}
             </Button>
           </div>
         </CardContent>
       </Card>
 
+      {precioMercado > 0 && (
+        <p className="text-sm text-muted-foreground text-center">
+          Precio de mercado estimado: <strong>{formatARS(precioMercado)}</strong>
+        </p>
+      )}
+
       {opciones.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-lg font-semibold">Opciones encontradas ({opciones.length})</h2>
+          <h2 className="text-lg font-semibold">Opciones ({opciones.length})</h2>
           {opciones.map((op, i) => {
             const elegida = seleccionada === i;
             return (
@@ -247,7 +277,7 @@ function IlliaPage() {
                       <div className="text-2xl font-bold text-primary">{formatARS(op.total)}</div>
                       <Button size="sm" variant={elegida ? "default" : "outline"}
                         onClick={() => marcarSeleccion(i)} className="mt-2">
-                        {elegida ? <><Check className="w-4 h-4 mr-1" />Elegida</> : "Cliente elige esta"}
+                        {elegida ? <><Check className="w-4 h-4 mr-1" />Elegida</> : "Elegir"}
                       </Button>
                     </div>
                   </div>

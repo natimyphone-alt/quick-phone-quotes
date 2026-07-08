@@ -1,6 +1,5 @@
 export const IVA_RATE = 0.21;
 
-// Ganancia calculada sobre el precio del repuesto solo
 export function calcularGanancia(precioRepuesto: number): number {
   if (precioRepuesto <= 39999) return 30000;
   if (precioRepuesto <= 49999) return 40000;
@@ -13,20 +12,20 @@ export function calcularGanancia(precioRepuesto: number): number {
   return 150000;
 }
 
-// Mano de obra calculada sobre precio de venta del celular en el mercado
-// Gama baja: A15/A16/G15/G35 = $255.000-$420.000 → $15.000
-// Gama media: A26/G45/A36 = $465.000-$999.999 → $20.000
-// Gama media-alta: A56/G85/Edge 40 = $600.000-$1.200.000 → $35.000
-// Gama alta: S24/Edge 50 = $1.200.000-$1.800.000 → $45.000
-// Premium: S25/S25+ = $1.800.000-$2.500.000 → $60.000
-// Ultra premium: S25 Ultra/S26 Ultra = +$2.500.000 → $80.000
-export function calcularManoObra(precioVentaCelular: number): number {
-  if (precioVentaCelular <= 420000) return 15000;
-  if (precioVentaCelular <= 650000) return 20000;
-  if (precioVentaCelular <= 1200000) return 35000;
-  if (precioVentaCelular <= 1800000) return 45000;
-  if (precioVentaCelular <= 2500000) return 60000;
+export function calcularManoObraAndroid(precioVenta: number): number {
+  if (precioVenta <= 420000) return 15000;
+  if (precioVenta <= 650000) return 20000;
+  if (precioVenta <= 1200000) return 35000;
+  if (precioVenta <= 1800000) return 45000;
+  if (precioVenta <= 2500000) return 60000;
   return 80000;
+}
+
+export function calcularManoObraIphone(modelo: string, conIC: boolean): number {
+  const m = modelo.toUpperCase();
+  const es15a17 = /1[567]/.test(m) || m.includes("15") || m.includes("16") || m.includes("17");
+  if (es15a17) return conIC ? 90000 : 50000;
+  return conIC ? 80000 : 50000;
 }
 
 export function formatARS(n: number): string {
