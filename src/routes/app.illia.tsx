@@ -5,7 +5,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { formatARS, calcularManoObraAndroid, calcularManoObraIphone } from "@/lib/calculos";
+import {
+  formatARS,
+  calcularManoObraAndroid,
+  calcularManoObraModuloIphone,
+  calcularManoObraBateriaIphone,
+  calcularManoObraBateriaAndroid,
+  calcularManoObraPlacaAndroid,
+} from "@/lib/calculos";
 import { calcularOpcion, OpcionCalculada, ENVIO_PATAGONIA, ENVIO_FV } from "@/lib/proveedores";
 import { descargarPDFMultiOpciones } from "@/lib/pdf";
 import { buildMensajeWhatsApp, abrirWhatsApp } from "@/lib/whatsapp";
@@ -50,6 +57,7 @@ function IlliaPage() {
     modelo: "",
     tipo_reparacion: "Módulo" as TipoReparacion,
     con_ic: false,
+    con_condicion: false,
   });
   const [buscando, setBuscando] = useState(false);
   const [opciones, setOpciones] = useState<OpcionCalculada[]>([]);
@@ -68,11 +76,23 @@ function IlliaPage() {
     setPrecioMercado(0);
   };
 
+  const calcularManoObra = (precioVenta: number): number => {
+    if (esIphone) {
+      if (form.tipo_reparacion === "Módulo") return calcularManoObraModuloIphone(form.modelo, form.con_ic);
+      if (form.tipo_reparacion === "Batería") return calcularManoObraBateriaIphone(form.modelo, form.con_condicion);
+      return 0;
+    }
+    if (form.tipo_reparacion === "Módulo") return calcularManoObraAndroid(precioVenta);
+    if (form.tipo_reparacion === "Batería") return calcularManoObraBateriaAndroid(precioVenta);
+    if (form.tipo_reparacion === "Placa de carga") return calcularManoObraPlacaAndroid(precioVenta);
+    return 0;
+  };
+
   const buscarRepuestos = useCallback(async () => {
     if (!form.marca.trim() || !form.modelo.trim()) return toast.error("Ingresá marca y modelo");
 
     setBuscando(true);
-    toast.info("Buscando precio de mercado...");
+    toast.info("Buscando...");
 
     const [{ data, error }, precioVenta] = await Promise.all([
       supabase.rpc("buscar_modelo_exacto", {
@@ -94,13 +114,11 @@ function IlliaPage() {
       return;
     }
 
+    const manoObra = calcularManoObra(precioVenta);
+
     const ops = resultados.map((r: any) => {
       const precioRepuesto = Number(r.precio_calculado ?? r.precio_proveedor ?? r.precio);
       const envio = r.proveedor === "Patagonia Cell" ? ENVIO_PATAGONIA : ENVIO_FV;
-      const manoObra = esIphone
-        ? calcularManoObraIphone(form.modelo, form.con_ic)
-        : calcularManoObraAndroid(precioVenta);
-
       return calcularOpcion({
         proveedor: r.proveedor,
         calidad: r.calidad,
@@ -224,8 +242,9 @@ function IlliaPage() {
               ))}
             </div>
           </Field>
-          {esIphone && (
-            <Field label="Tipo de cambio iPhone *" full>
+
+          {esIphone && form.tipo_reparacion === "Módulo" && (
+            <Field label="Tipo de cambio módulo iPhone *" full>
               <div className="flex gap-2">
                 {[{ label: "Sin IC", value: false }, { label: "Con IC", value: true }].map(opt => (
                   <button key={String(opt.value)} onClick={() => upd("con_ic", opt.value)}
@@ -240,9 +259,29 @@ function IlliaPage() {
               </div>
             </Field>
           )}
+
+          {esIphone && form.tipo_reparacion === "Batería" && (
+            <Field label="Tipo de cambio batería iPhone *" full>
+              <div className="flex gap-2">
+                {[{ label: "Sin condición", value: false }, { label: "Con condición", value: true }].map(opt => (
+                  <button key={String(opt.value)} onClick={() => upd("con_condicion", opt.value)}
+                    className={`flex-1 py-2 px-3 rounded-md text-sm font-medium border transition-colors ${
+                      form.con_condicion === opt.value
+                        ? "bg-primary text-primary-foreground border-primary"
+                        : "bg-background border-input hover:bg-accent"
+                    }`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+          )}
+
           <div className="sm:col-span-2">
             <Button onClick={buscarRepuestos} disabled={buscando} className="w-full h-11" size="lg">
-              {buscando ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Buscando...</> : <><Search className="w-4 h-4 mr-2" />Buscar opciones</>}
+              {buscando
+                ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Buscando...</>
+                : <><Search className="w-4 h-4 mr-2" />Buscar opciones</>}
             </Button>
           </div>
         </CardContent>
