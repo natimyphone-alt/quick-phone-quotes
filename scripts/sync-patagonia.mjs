@@ -32,7 +32,7 @@ const CATEGORIAS = [
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-function parsearProductos(html, marca, tipo) {
+function parsearProductos(html) {
   const productos = [];
   const vistos = new Set();
   const bloqueRe = /data-variants="([^"]+)"[\s\S]{0,3000}?href="(https?:\/\/[^"]+\/productos\/[^"]+)"[^>]*title="([^"]+)"/g;
@@ -52,35 +52,40 @@ function parsearProductos(html, marca, tipo) {
     const precio = Number(v.price_number) || 0;
     if (precio <= 0) continue;
     const stock = v.available === true && (v.stock === null || Number(v.stock) > 0);
-    const calidad = /oled/i.test(nombre) ? "OLED" : /incell/i.test(nombre) ? "Incell" : /service.?pack/i.test(nombre) ? "Service Pack" : "Original";
+    const calidad = /oled/i.test(nombre) ? "OLED"
+      : /incell/i.test(nombre) ? "Incell"
+      : /service.?pack/i.test(nombre) ? "Service Pack"
+      : "Original";
     productos.push({ nombre, precio, url, stock, calidad });
   }
   return productos;
 }
 
-async function obtenerTodasLasPaginas(page, urlBase, marca, tipo) {
+async function obtenerTodasLasPaginas(page, urlBase) {
   const todos = [];
   const vistos = new Set();
   let paginaActual = 1;
 
   while (paginaActual <= 15) {
     const url = paginaActual === 1 ? urlBase : `${urlBase}?page=${paginaActual}`;
-    console.log(`    Página ${paginaActual}: ${url}`);
+    console.log(`    Página ${paginaActual}`);
     try {
-      await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+      const response = await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+      if (response && response.status() === 404) {
+        console.log(`    404 real, terminando.`);
+        break;
+      }
       const html = await page.content();
-      const productos = parsearProductos(html, marca, tipo);
-      
-      // Filtrar duplicados
+      const productos = parsearProductos(html);
       const nuevos = productos.filter(p => !vistos.has(p.url));
       nuevos.forEach(p => vistos.add(p.url));
-      
       if (nuevos.length === 0) break;
       todos.push(...nuevos);
+      console.log(`    → ${nuevos.length} productos (total: ${todos.length})`);
       paginaActual++;
       await new Promise(r => setTimeout(r, 800));
     } catch (e) {
-      console.error(`    Error en página ${paginaActual}:`, e.message);
+      console.error(`    Error:`, e.message);
       break;
     }
   }
@@ -96,19 +101,30 @@ async function sincronizar() {
   const page = await browser.newPage();
   await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36");
 
-  let totalImported = 0, totalUpdated = 0, totalErrors = 0;
+  let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalSinStock = 0;
   const ahora = new Date().toISOString();
 
+  // Primero marcar todos los productos de Patagonia Cell como sin stock
+  await supabase.from("catalogo_repuestos")
+    .update({ stock: false })
+    .eq("proveedor", "Patagonia Cell");
+  console.log("Productos anteriores marcados como sin stock.\n");
+
   for (const cat of CATEGORIAS) {
-    console.log(`Procesando ${cat.marca} ${cat.tipo} - ${cat.url}`);
+    console.log(`Procesando ${cat.marca} ${cat.tipo}...`);
     try {
-      const productos = await obtenerTodasLasPaginas(page, cat.url, cat.marca, cat.tipo);
-      console.log(`  → ${productos.length} productos encontrados\n`);
+      const productos = await obtenerTodasLasPaginas(page, cat.url);
+      const conStock = productos.filter(p => p.stock).length;
+      const sinStock = productos.filter(p => !p.stock).length;
+      console.log(`  → Total: ${productos.length} (${conStock} con stock, ${sinStock} sin stock)\n`);
+      totalSinStock += sinStock;
 
       for (const p of productos) {
+        if (!p.stock) continue;
+
         const modelo = p.nombre
           .replace(/^(Módulo|Modulo|Batería|Bateria|Pantalla)\s+/i, "")
-          .replace(new RegExp(`^${cat.marca}\\s+`, "i"), "")
+          .replace(/^(Samsung|Motorola|iPhone|Xiaomi|LG|Huawei|Alcatel)\s+/i, "")
           .replace(/\s*[-–]\s*(OLED|INCELL|Original|SERVICE PACK|Calidad).*$/i, "")
           .trim() || p.nombre;
 
@@ -121,13 +137,14 @@ async function sincronizar() {
 
         const row = {
           proveedor: "Patagonia Cell",
-          marca: cat.marca, modelo,
+          marca: cat.marca,
+          modelo,
           tipo_repuesto: cat.tipo,
           calidad: p.calidad,
           precio: p.precio,
           precio_proveedor: p.precio,
           precio_calculado: p.precio,
-          stock: p.stock,
+          stock: true,
           url_producto: p.url,
           fecha_actualizacion: ahora,
           ultima_sincronizacion: ahora,
@@ -148,7 +165,11 @@ async function sincronizar() {
   }
 
   await browser.close();
-  console.log(`\nFinalizado: +${totalImported} nuevos, ~${totalUpdated} actualizados, ${totalErrors} errores`);
+  console.log(`\nFinalizado:`);
+  console.log(`  +${totalImported} nuevos importados`);
+  console.log(`  ~${totalUpdated} actualizados`);
+  console.log(`  ${totalSinStock} sin stock omitidos`);
+  console.log(`  ${totalErrors} errores`);
 }
 
 sincronizar().catch(console.error);

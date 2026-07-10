@@ -25,7 +25,7 @@ export const Route = createFileRoute("/app/illia")({
   component: IlliaPage,
 });
 
-type TipoReparacion = "Módulo" | "Batería" | "Placa de carga";
+type TipoReparacion = "Módulo" | "Batería";
 
 async function buscarPrecioMercado(marca: string, modelo: string): Promise<number> {
   try {
@@ -84,7 +84,6 @@ function IlliaPage() {
     }
     if (form.tipo_reparacion === "Módulo") return calcularManoObraAndroid(precioVenta);
     if (form.tipo_reparacion === "Batería") return calcularManoObraBateriaAndroid(precioVenta);
-    if (form.tipo_reparacion === "Placa de carga") return calcularManoObraPlacaAndroid(precioVenta);
     return 0;
   };
 
@@ -230,7 +229,7 @@ function IlliaPage() {
           </Field>
           <Field label="Tipo de reparación *" full>
             <div className="flex gap-2">
-              {(["Módulo", "Batería", "Placa de carga"] as TipoReparacion[]).map(t => (
+              {(["Módulo", "Batería"] as TipoReparacion[]).map(t => (
                 <button key={t} onClick={() => upd("tipo_reparacion", t)}
                   className={`flex-1 py-2 px-2 rounded-md text-sm font-medium border transition-colors ${
                     form.tipo_reparacion === t
