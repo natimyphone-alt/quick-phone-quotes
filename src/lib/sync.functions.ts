@@ -152,7 +152,7 @@ export const syncFV = createServerFn({ method: "POST" })
     try {
       const { csrfToken, cookie } = await obtenerSesion();
       let page = 1;
-      while (page <= 10) {
+      while (page <= 30) {
         const url = `${FV_BASE}/v4/product/category?filter_page=${page}&filter_order=0&filter_categories%5B%5D=${cat.categoriaId}`;
         const json = await fetchJsonFV(url, csrfToken, cookie);
         const productos: FVApiProducto[] = json?.data || [];
