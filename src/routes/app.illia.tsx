@@ -302,7 +302,9 @@ function IlliaPage() {
                 <CardContent className="p-4">
                   <div className="flex justify-between items-center flex-wrap gap-2">
                     <div>
-                      <div className="font-semibold text-lg">{op.proveedor}</div>
+                      <div className="font-semibold text-lg">
+  {op.proveedor === "FV Mayorista" ? "Cipolletti" : op.proveedor === "Patagonia Cell" ? "Neuquén" : op.proveedor}
+</div>
                       {op.calidad && <Badge className="mt-1">{op.calidad}</Badge>}
                       {op.url_producto && (
                         <a href={op.url_producto} target="_blank" rel="noreferrer"
