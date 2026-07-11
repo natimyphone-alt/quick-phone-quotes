@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Smartphone, LogOut, Home, ClipboardList, History, Settings, Package } from "lucide-react";
+import { LogOut, Home, ClipboardList, History, Settings, Package } from "lucide-react";
 
 export const Route = createFileRoute("/app")({
   ssr: false,
@@ -41,13 +41,13 @@ function AppLayout() {
     <div className="min-h-screen bg-background flex flex-col">
       <header className="bg-primary text-primary-foreground shadow-md sticky top-0 z-30">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/app" className="flex items-center gap-2 font-semibold">
-            <Smartphone className="w-5 h-5" />
-            <span>MyPhone Hub</span>
+          <Link to="/app" className="flex items-center gap-2">
+            <img src="/logom_png.png" alt="MyPhone" className="w-8 h-8 rounded-full" />
+            <span className="font-semibold text-sm hidden sm:inline">MyPhone Hub</span>
           </Link>
           <div className="flex items-center gap-2">
             <span className="hidden sm:inline text-sm opacity-90">
-              {nombre || user.email} {isAdmin && <span className="ml-1 text-xs bg-accent px-2 py-0.5 rounded">Admin</span>}
+              {nombre || user.email} {isAdmin && <span className="ml-1 text-xs bg-white/20 px-2 py-0.5 rounded">Admin</span>}
             </span>
             <Button size="sm" variant="ghost" onClick={logout} className="text-primary-foreground hover:bg-white/10">
               <LogOut className="w-4 h-4" />
