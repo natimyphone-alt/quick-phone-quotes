@@ -11,15 +11,13 @@ import {
   calcularManoObraModuloIphone,
   calcularManoObraBateriaIphone,
   calcularManoObraBateriaAndroid,
-  calcularManoObraPlacaAndroid,
 } from "@/lib/calculos";
 import { calcularOpcion, OpcionCalculada, ENVIO_PATAGONIA, ENVIO_FV } from "@/lib/proveedores";
 import { descargarPDFMultiOpciones } from "@/lib/pdf";
-import { buildMensajeWhatsApp, abrirWhatsApp } from "@/lib/whatsapp";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { toast } from "sonner";
-import { FileDown, MessageCircle, Save, Search, Check, Loader2 } from "lucide-react";
+import { FileDown, Save, Search, Check, Loader2 } from "lucide-react";
 
 export const Route = createFileRoute("/app/illia")({
   component: IlliaPage,
@@ -51,7 +49,7 @@ async function buscarPrecioMercado(marca: string, modelo: string): Promise<numbe
 }
 
 function IlliaPage() {
-  const { user, sucursalId, nombre } = useAuth();
+  const { user, sucursalId, nombre, isAdmin } = useAuth();
   const [form, setForm] = useState({
     marca: "",
     modelo: "",
@@ -126,6 +124,7 @@ function IlliaPage() {
         envio,
         url_producto: r.url_producto,
         catalogo_id: r.id,
+        nombre_producto: r.modelo,
       });
     });
 
@@ -193,25 +192,6 @@ function IlliaPage() {
       reparacion: form.tipo_reparacion,
       opciones, seleccionadaIdx: seleccionada, usuario: nombre,
     });
-  };
-
-  const whatsapp = () => {
-    if (opciones.length === 0) return;
-    const elegida = seleccionada !== null ? opciones[seleccionada] : null;
-    let msg: string;
-    if (elegida) {
-      msg = buildMensajeWhatsApp({
-        cliente: "", marca: form.marca, modelo: form.modelo,
-        reparacion: `${form.tipo_reparacion} (${elegida.proveedor} ${elegida.calidad || ""})`,
-        total: elegida.total,
-      });
-    } else {
-      const lineas = opciones.map((o, i) =>
-        `Opción ${i + 1}: ${o.proveedor} ${o.calidad || ""} — ${formatARS(o.total)}`
-      ).join("\n");
-      msg = `Presupuesto ${form.marca} ${form.modelo} (${form.tipo_reparacion}):\n\n${lineas}\n\nMuchas gracias.\nMyPhone`;
-    }
-    abrirWhatsApp("", msg);
   };
 
   return (
@@ -303,10 +283,13 @@ function IlliaPage() {
                   <div className="flex justify-between items-center flex-wrap gap-2">
                     <div>
                       <div className="font-semibold text-lg">
-  {op.proveedor === "FV Mayorista" ? "Cipolletti" : op.proveedor === "Patagonia Cell" ? "Neuquén" : op.proveedor}
-</div>
+                        {op.proveedor === "FV Mayorista" ? "Cipolletti" : op.proveedor === "Patagonia Cell" ? "Neuquén" : op.proveedor}
+                      </div>
+                      {op.nombre_producto && (
+                        <div className="text-sm text-muted-foreground mt-0.5">{op.nombre_producto}</div>
+                      )}
                       {op.calidad && <Badge className="mt-1">{op.calidad}</Badge>}
-                      {op.url_producto && (
+                      {isAdmin && op.url_producto && (
                         <a href={op.url_producto} target="_blank" rel="noreferrer"
                           className="block text-xs text-primary underline mt-1">
                           Ver producto
@@ -326,13 +309,13 @@ function IlliaPage() {
             );
           })}
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
             <Button onClick={guardar} disabled={saving || !!saved} size="lg">
               <Save className="w-4 h-4 mr-2" />{saved ? `Guardado N° ${saved.numero}` : "Guardar"}
             </Button>
             <Button onClick={pdf} variant="secondary" size="lg">
               <FileDown className="w-4 h-4 mr-2" />PDF
-            </Button>        
+            </Button>
           </div>
         </div>
       )}
