@@ -25,29 +25,6 @@ export const Route = createFileRoute("/app/illia")({
 
 type TipoReparacion = "Módulo" | "Batería";
 
-async function buscarPrecioMercado(marca: string, modelo: string): Promise<number> {
-  try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-6",
-        max_tokens: 100,
-        messages: [{
-          role: "user",
-          content: `¿Cuál es el precio de venta aproximado en pesos argentinos del ${marca} ${modelo} en julio 2026 en Argentina? Respondé SOLO con el número sin puntos ni comas ni símbolo $. Por ejemplo: 350000`,
-        }],
-      }),
-    });
-    const data = await response.json();
-    const texto = data.content?.[0]?.text?.trim() || "0";
-    const numero = parseInt(texto.replace(/\D/g, ""), 10);
-    return isNaN(numero) ? 0 : numero;
-  } catch {
-    return 0;
-  }
-}
-
 function IlliaPage() {
   const { user, sucursalId, nombre, isAdmin } = useAuth();
   const [form, setForm] = useState({
@@ -74,6 +51,16 @@ function IlliaPage() {
     setPrecioMercado(0);
   };
 
+  const buscarPrecioEnTabla = async (marca: string, modelo: string): Promise<number> => {
+    const { data } = await supabase
+      .from("precios_mercado")
+      .select("precio_venta")
+      .ilike("marca", marca)
+      .ilike("modelo", modelo)
+      .maybeSingle();
+    return Number(data?.precio_venta) || 0;
+  };
+
   const calcularManoObra = (precioVenta: number): number => {
     if (esIphone) {
       if (form.tipo_reparacion === "Módulo") return calcularManoObraModuloIphone(form.modelo, form.con_ic);
@@ -97,7 +84,7 @@ function IlliaPage() {
         p_modelo: form.modelo.trim().toUpperCase(),
         p_tipo: form.tipo_reparacion,
       }),
-      buscarPrecioMercado(form.marca.trim(), form.modelo.trim()),
+      buscarPrecioEnTabla(form.marca.trim(), form.modelo.trim()),
     ]);
 
     setBuscando(false);
@@ -268,7 +255,7 @@ function IlliaPage() {
 
       {precioMercado > 0 && (
         <p className="text-sm text-muted-foreground text-center">
-          Precio de mercado estimado: <strong>{formatARS(precioMercado)}</strong>
+          Precio de mercado: <strong>{formatARS(precioMercado)}</strong>
         </p>
       )}
 
@@ -289,12 +276,12 @@ function IlliaPage() {
                         <div className="text-sm text-muted-foreground mt-0.5">{op.nombre_producto}</div>
                       )}
                       {op.calidad && (
-  <Badge className="mt-1">
-    {op.proveedor === "Patagonia Cell" && op.calidad === "Original" 
-      ? "Calidad Original" 
-      : op.calidad}
-  </Badge>
-)}
+                        <Badge className="mt-1">
+                          {op.proveedor === "Patagonia Cell" && op.calidad === "Original"
+                            ? "Calidad Original"
+                            : op.calidad}
+                        </Badge>
+                      )}
                       {isAdmin && op.url_producto && (
                         <a href={op.url_producto} target="_blank" rel="noreferrer"
                           className="block text-xs text-primary underline mt-1">

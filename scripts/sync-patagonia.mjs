@@ -55,7 +55,7 @@ function parsearProductos(html) {
     const calidad = /oled/i.test(nombre) ? "OLED"
       : /incell/i.test(nombre) ? "Incell"
       : /service.?pack/i.test(nombre) ? "Service Pack"
-      : "Original";
+      : "Calidad Original";
     productos.push({ nombre, precio, url, stock, calidad });
   }
   return productos;
@@ -104,7 +104,6 @@ async function sincronizar() {
   let totalImported = 0, totalUpdated = 0, totalErrors = 0, totalSinStock = 0;
   const ahora = new Date().toISOString();
 
-  // Primero marcar todos los productos de Patagonia Cell como sin stock
   await supabase.from("catalogo_repuestos")
     .update({ stock: false })
     .eq("proveedor", "Patagonia Cell");
@@ -139,6 +138,7 @@ async function sincronizar() {
           proveedor: "Patagonia Cell",
           marca: cat.marca,
           modelo,
+          nombre_completo: p.nombre,
           tipo_repuesto: cat.tipo,
           calidad: p.calidad,
           precio: p.precio,
