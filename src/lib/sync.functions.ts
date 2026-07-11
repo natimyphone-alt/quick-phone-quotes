@@ -18,7 +18,6 @@ interface SyncResult {
 
 const FV_BASE = "https://www.fvmayorista.com";
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36";
-const PC_BASE = "https://neuquenpatagoniacell.com.ar";
 
 const CATEGORIAS_FV: { marca: string; tipo: "Módulo" | "Batería"; categoriaId: number }[] = [
   { marca: "Motorola", tipo: "Módulo", categoriaId: 1631246 },
@@ -103,36 +102,6 @@ function inferirCalidadFV(nombre: string): string {
   return "Original";
 }
 
-interface PCProducto {
-  nombre: string; precio: number; url: string; stock: boolean; imagen: string | null;
-}
-
-function parsearResultadosPC(html: string): PCProducto[] {
-  const productos: PCProducto[] = [];
-  const vistos = new Set<string>();
-
-  const bloqueRe = /data-variants="([^"]+)"[\s\S]{0,3000}?href="(https?:\/\/[^"]+\/productos\/[^"]+)"[^>]*title="([^"]+)"/g;
-  let m: RegExpExecArray | null;
-  while ((m = bloqueRe.exec(html)) !== null) {
-    const url = m[2];
-    if (vistos.has(url)) continue;
-    vistos.add(url);
-    const nombre = m[3].replace(/&amp;/g, "&").replace(/&quot;/g, '"').trim();
-    let variantsJson: any[] = [];
-    try {
-      const decoded = m[1].replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#39;/g, "'");
-      variantsJson = JSON.parse(decoded);
-    } catch { continue; }
-    if (!variantsJson.length) continue;
-    const v = variantsJson[0];
-    const precio = Number(v.price_number) || 0;
-    if (precio <= 0) continue;
-    const stock = v.available === true && (v.stock === null || Number(v.stock) > 0);
-    productos.push({ nombre, precio, url, stock, imagen: null });
-  }
-  return productos;
-}
-
 export const syncFV = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ offset: z.number().int().min(0).default(0) }).parse(d ?? {}))
   .middleware([requireSupabaseAuth])
@@ -211,35 +180,8 @@ export const resetFVSync = createServerFn({ method: "POST" })
 export const buscarPatagoniaCell = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ marca: z.string().min(1), modelo: z.string().min(1) }).parse(d ?? {}))
   .middleware([requireSupabaseAuth])
-  .handler(async ({ data }): Promise<{ ok: boolean; productos: PCProducto[]; message: string }> => {
-    const query = `${data.marca} ${data.modelo}`.trim();
-    try {
-      const puppeteer = await import("puppeteer");
-      const browser = await puppeteer.default.launch({
-        headless: true,
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-      });
-      const page = await browser.newPage();
-      await page.setUserAgent(UA);
-      await page.goto(`${PC_BASE}/search/?q=${encodeURIComponent(query)}`, {
-        waitUntil: "networkidle2",
-        timeout: 30000,
-      });
-      const html = await page.content();
-      await browser.close();
-
-      const fs = await import("fs");
-      fs.writeFileSync("C:/Users/PCBOX/pc_debug.html", `LENGTH:${html.length}\n\n${html.slice(0, 3000)}`);
-
-      const productos = parsearResultadosPC(html);
-      return {
-        ok: true,
-        productos,
-        message: productos.length > 0 ? `${productos.length} resultados en Patagonia Cell` : "Sin resultados en Patagonia Cell",
-      };
-    } catch (e: any) {
-      return { ok: false, productos: [], message: e?.message || "Error buscando en Patagonia Cell" };
-    }
+  .handler(async (): Promise<{ ok: boolean; productos: any[]; message: string }> => {
+    return { ok: true, productos: [], message: "Patagonia Cell usa catálogo local." };
   });
 
 export const syncPatagonia = createServerFn({ method: "POST" })
@@ -247,7 +189,7 @@ export const syncPatagonia = createServerFn({ method: "POST" })
   .handler(async ({ context }): Promise<SyncResult> => {
     const { supabase, userId } = context;
     await ensureAdmin(supabase, userId);
-    return { proveedor: "Patagonia Cell", ok: true, imported: 0, updated: 0, errors: 0, message: "Patagonia Cell usa búsqueda en tiempo real. No requiere sincronización previa." };
+    return { proveedor: "Patagonia Cell", ok: true, imported: 0, updated: 0, errors: 0, message: "Patagonia Cell se sincroniza con el script local sync-patagonia.mjs" };
   });
 
 export const syncTodo = createServerFn({ method: "POST" })
@@ -257,6 +199,6 @@ export const syncTodo = createServerFn({ method: "POST" })
     await ensureAdmin(supabase, userId);
     return [
       { proveedor: "FV Mayorista", ok: false, imported: 0, updated: 0, errors: 0, message: "Usá el botón Sincronizar FV." },
-      { proveedor: "Patagonia Cell", ok: true, imported: 0, updated: 0, errors: 0, message: "Búsqueda en tiempo real, no requiere sincronización." },
+      { proveedor: "Patagonia Cell", ok: true, imported: 0, updated: 0, errors: 0, message: "Usá el script local sync-patagonia.mjs" },
     ];
   });
