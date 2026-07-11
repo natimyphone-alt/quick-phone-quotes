@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { Smartphone } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   ssr: false,
@@ -52,13 +53,13 @@ function AuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
-      <Card className="w-full max-w-md shadow-lg border border-border">
-        <CardHeader className="text-center space-y-3 pb-2">
-          <div className="mx-auto">
-            <img src="/logom_png.png" alt="MyPhone" className="w-16 h-16 rounded-full mx-auto" />
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-primary to-accent">
+      <Card className="w-full max-w-md shadow-2xl">
+        <CardHeader className="text-center space-y-2">
+          <div className="mx-auto bg-primary text-primary-foreground rounded-2xl w-14 h-14 flex items-center justify-center">
+            <Smartphone className="w-7 h-7" />
           </div>
-          <CardTitle className="text-2xl font-bold">MyPhone Hub</CardTitle>
+          <CardTitle className="text-2xl">MyPhone Hub</CardTitle>
           <CardDescription>Ingresá para gestionar tus presupuestos</CardDescription>
         </CardHeader>
         <CardContent>

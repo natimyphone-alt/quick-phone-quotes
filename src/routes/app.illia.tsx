@@ -124,7 +124,7 @@ function IlliaPage() {
         envio,
         url_producto: r.url_producto,
         catalogo_id: r.id,
-        nombre_producto: r.modelo,
+        nombre_producto: (r as any).nombre_completo || r.modelo,
       });
     });
 
@@ -288,7 +288,13 @@ function IlliaPage() {
                       {op.nombre_producto && (
                         <div className="text-sm text-muted-foreground mt-0.5">{op.nombre_producto}</div>
                       )}
-                      {op.calidad && <Badge className="mt-1">{op.calidad}</Badge>}
+                      {op.calidad && (
+  <Badge className="mt-1">
+    {op.proveedor === "Patagonia Cell" && op.calidad === "Original" 
+      ? "Calidad Original" 
+      : op.calidad}
+  </Badge>
+)}
                       {isAdmin && op.url_producto && (
                         <a href={op.url_producto} target="_blank" rel="noreferrer"
                           className="block text-xs text-primary underline mt-1">

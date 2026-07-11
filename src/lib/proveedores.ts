@@ -20,6 +20,7 @@ export interface OpcionCalculada {
   ajustado_minimo?: boolean;
   url_producto?: string | null;
   catalogo_id?: string;
+  nombre_producto?: string | null;
 }
 
 export function calcularOpcion(input: {
@@ -33,6 +34,7 @@ export function calcularOpcion(input: {
   minimoFinal?: number | null;
   url_producto?: string | null;
   catalogo_id?: string;
+  nombre_producto?: string | null;
 }): OpcionCalculada {
   const precioRepuesto =
     input.precioCalculado ??
@@ -59,6 +61,7 @@ export function calcularOpcion(input: {
     total,
     url_producto: input.url_producto,
     catalogo_id: input.catalogo_id,
+    nombre_producto: input.nombre_producto,
   };
 }
 
