@@ -332,10 +332,7 @@ function IlliaPage() {
             </Button>
             <Button onClick={pdf} variant="secondary" size="lg">
               <FileDown className="w-4 h-4 mr-2" />PDF
-            </Button>
-            <Button onClick={whatsapp} size="lg" className="bg-success text-success-foreground hover:opacity-90">
-              <MessageCircle className="w-4 h-4 mr-2" />WhatsApp
-            </Button>
+            </Button>        
           </div>
         </div>
       )}
