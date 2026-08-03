@@ -9,7 +9,7 @@ import { I as Input } from "./input-C0QjszdI.js";
 import { L as Label } from "./label-JU3yqRBo.js";
 import { T as Tabs, a as TabsList, b as TabsTrigger, c as TabsContent } from "./tabs-D_u1EXWn.js";
 import { S as Select, a as SelectTrigger, b as SelectValue, c as SelectContent, d as SelectItem } from "./select-CZRUt5a6.js";
-import { f as formatARS } from "./calculos-BajsDPnH.js";
+import { f as formatARS } from "./calculos-B0M14fmx.js";
 import { toast } from "sonner";
 import "@supabase/supabase-js";
 import "./utils-H80jjgLf.js";

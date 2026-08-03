@@ -1,4 +1,4 @@
-import { f as formatARS } from "./calculos-BajsDPnH.js";
+import { f as formatARS } from "./calculos-B0M14fmx.js";
 function buildMensajeWhatsApp(p) {
   const equipo = [p.marca, p.modelo].filter(Boolean).join(" ") || "tu equipo";
   const trabajo = p.reparacion || p.tipo_trabajo || "-";

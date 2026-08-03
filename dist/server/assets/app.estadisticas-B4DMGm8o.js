@@ -5,7 +5,7 @@ import { s as supabase } from "./client-CzxaLLtB.js";
 import { u as useAuth } from "./use-auth-GpmAL4wB.js";
 import { C as Card, a as CardHeader, b as CardTitle, d as CardContent } from "./card-DQ5v2DYb.js";
 import { ResponsiveContainer, BarChart, XAxis, YAxis, Tooltip, Bar, PieChart, Pie, Cell, Legend } from "recharts";
-import { f as formatARS } from "./calculos-BajsDPnH.js";
+import { f as formatARS } from "./calculos-B0M14fmx.js";
 import "@supabase/supabase-js";
 import "./utils-H80jjgLf.js";
 import "clsx";

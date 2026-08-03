@@ -1,6 +1,5 @@
 export const IVA_RATE = 0.21;
 
-// Ganancia calculada sobre el precio del repuesto solo
 export function calcularGanancia(precioRepuesto: number): number {
   if (precioRepuesto <= 39999) return 30000;
   if (precioRepuesto <= 49999) return 40000;
@@ -13,8 +12,13 @@ export function calcularGanancia(precioRepuesto: number): number {
   return 150000;
 }
 
-// Mano de obra Android según precio de venta del celular en el mercado
-export function calcularManoObraAndroid(precioVenta: number): number {
+export function calcularManoObraAndroid(precioVenta: number, marca?: string, modelo?: string): number {
+  const m = (modelo || "").toLowerCase();
+  const mk = (marca || "").toLowerCase();
+
+  if (mk === "motorola" && m.includes("razr")) return 55000;
+  if (mk === "samsung" && (m.includes("fold") || m.includes("flip"))) return 65000;
+
   if (precioVenta <= 420000) return 15000;
   if (precioVenta <= 650000) return 20000;
   if (precioVenta <= 1200000) return 35000;
@@ -23,32 +27,26 @@ export function calcularManoObraAndroid(precioVenta: number): number {
   return 80000;
 }
 
-// Mano de obra módulo iPhone según generación y si tiene IC
 export function calcularManoObraModuloIphone(modelo: string, conIC: boolean): number {
   const m = modelo.toUpperCase();
   const num = parseInt(m.replace(/[^0-9]/g, ""), 10);
   if (num >= 17) return conIC ? 150000 : 50000;
   if (num >= 15) return conIC ? 90000 : 50000;
-  // 11 al 14
   return conIC ? 80000 : 50000;
 }
 
-// Mano de obra batería iPhone según generación y condición
 export function calcularManoObraBateriaIphone(modelo: string, conCondicion: boolean): number {
   const m = modelo.toUpperCase();
   const num = parseInt(m.replace(/[^0-9]/g, ""), 10);
   if (num >= 16) return conCondicion ? 95000 : 70000;
-  // hasta iPhone 15
   return conCondicion ? 60000 : 40000;
 }
 
-// Mano de obra batería Android
 export function calcularManoObraBateriaAndroid(precioVenta: number): number {
   if (precioVenta <= 650000) return 15000;
   return 25000;
 }
 
-// Mano de obra placa de carga Android
 export function calcularManoObraPlacaAndroid(precioVenta: number): number {
   if (precioVenta <= 650000) return 25000;
   return 45000;

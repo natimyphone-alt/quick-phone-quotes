@@ -1,5 +1,5 @@
 import jsPDF from "jspdf";
-import { f as formatARS } from "./calculos-BajsDPnH.js";
+import { f as formatARS } from "./calculos-B0M14fmx.js";
 function headerPDF(doc, numero, fecha, sucursal, subtitle = "Presupuesto de Reparación") {
   const W = doc.internal.pageSize.getWidth();
   doc.setFillColor(28, 36, 84);

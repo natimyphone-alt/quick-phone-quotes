@@ -52,13 +52,23 @@ function IlliaPage() {
   };
 
   const buscarPrecioEnTabla = async (marca: string, modelo: string): Promise<number> => {
-    const { data } = await supabase
+    const { data: exacto } = await supabase
       .from("precios_mercado")
       .select("precio_venta")
       .ilike("marca", marca)
       .ilike("modelo", modelo)
       .maybeSingle();
-    return Number(data?.precio_venta) || 0;
+    if (exacto?.precio_venta) return Number(exacto.precio_venta);
+
+    const { data: parcial } = await supabase
+      .from("precios_mercado")
+      .select("precio_venta, modelo")
+      .ilike("marca", marca)
+      .ilike("modelo", `${modelo}%`)
+      .order("modelo")
+      .limit(1)
+      .maybeSingle();
+    return Number(parcial?.precio_venta) || 0;
   };
 
   const calcularManoObra = (precioVenta: number): number => {
@@ -67,7 +77,7 @@ function IlliaPage() {
       if (form.tipo_reparacion === "Batería") return calcularManoObraBateriaIphone(form.modelo, form.con_condicion);
       return 0;
     }
-    if (form.tipo_reparacion === "Módulo") return calcularManoObraAndroid(precioVenta);
+    if (form.tipo_reparacion === "Módulo") return calcularManoObraAndroid(precioVenta, form.marca, form.modelo);
     if (form.tipo_reparacion === "Batería") return calcularManoObraBateriaAndroid(precioVenta);
     return 0;
   };
@@ -99,6 +109,7 @@ function IlliaPage() {
     }
 
     const manoObra = calcularManoObra(precioVenta);
+    console.log("DEBUG:", { marca: form.marca, modelo: form.modelo, precioVenta, manoObra });
 
     const ops = resultados.map((r: any) => {
       const precioRepuesto = Number(r.precio_calculado ?? r.precio_proveedor ?? r.precio);

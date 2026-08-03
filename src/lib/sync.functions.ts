@@ -121,7 +121,7 @@ export const syncFV = createServerFn({ method: "POST" })
     try {
       const { csrfToken, cookie } = await obtenerSesion();
       let page = 1;
-      while (page <= 30) {
+      while (page <= 50) {
         const url = `${FV_BASE}/v4/product/category?filter_page=${page}&filter_order=0&filter_categories%5B%5D=${cat.categoriaId}`;
         const json = await fetchJsonFV(url, csrfToken, cookie);
         const productos: FVApiProducto[] = json?.data || [];
@@ -135,7 +135,7 @@ export const syncFV = createServerFn({ method: "POST" })
           const modelo = modeloDesdeNombreFV(p.p_nombre, cat.marca);
           const calidad = inferirCalidadFV(p.p_nombre);
           const { data: existing } = await supabase.from("catalogo_repuestos").select("id").eq("proveedor", proveedor).eq("url_producto", urlProducto).maybeSingle();
-          const row = { proveedor, marca: cat.marca, modelo, tipo_repuesto: cat.tipo, calidad, precio, precio_proveedor: precio, precio_calculado: precioCalc, stock, url_producto: urlProducto, fecha_actualizacion: ahora, ultima_sincronizacion: ahora };
+          const row = { proveedor, marca: cat.marca, modelo, nombre_completo: p.p_nombre, tipo_repuesto: cat.tipo, calidad, precio, precio_proveedor: precio, precio_calculado: precioCalc, stock, url_producto: urlProducto, fecha_actualizacion: ahora, ultima_sincronizacion: ahora };
           if (existing?.id) {
             const { error } = await supabase.from("catalogo_repuestos").update(row as any).eq("id", existing.id);
             if (error) { errorSamples.push(error.message); errors++; } else updated++;
@@ -190,6 +190,36 @@ export const syncPatagonia = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     await ensureAdmin(supabase, userId);
     return { proveedor: "Patagonia Cell", ok: true, imported: 0, updated: 0, errors: 0, message: "Patagonia Cell se sincroniza con el script local sync-patagonia.mjs" };
+  });
+
+export const buscarPrecioMercadoFn = createServerFn({ method: "POST" })
+  .inputValidator((d: unknown) => z.object({ marca: z.string(), modelo: z.string() }).parse(d ?? {}))
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ data }): Promise<{ precio: number }> => {
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": process.env.ANTHROPIC_API_KEY || "",
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 100,
+          messages: [{
+            role: "user",
+            content: `¿Cuál es el precio de venta aproximado en pesos argentinos del ${data.marca} ${data.modelo} en julio 2026 en Argentina? Respondé SOLO con el número sin puntos ni comas ni símbolo $. Por ejemplo: 350000`,
+          }],
+        }),
+      });
+      const result = await response.json();
+      const texto = result.content?.[0]?.text?.trim() || "0";
+      const numero = parseInt(texto.replace(/\D/g, ""), 10);
+      return { precio: isNaN(numero) ? 0 : numero };
+    } catch {
+      return { precio: 0 };
+    }
   });
 
 export const syncTodo = createServerFn({ method: "POST" })
