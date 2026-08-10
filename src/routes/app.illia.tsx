@@ -52,6 +52,7 @@ function IlliaPage() {
   };
 
   const buscarPrecioEnTabla = async (marca: string, modelo: string): Promise<number> => {
+    // Primero busca coincidencia exacta
     const { data: exacto } = await supabase
       .from("precios_mercado")
       .select("precio_venta")
@@ -60,6 +61,7 @@ function IlliaPage() {
       .maybeSingle();
     if (exacto?.precio_venta) return Number(exacto.precio_venta);
 
+    // Si no encuentra, busca parcial
     const { data: parcial } = await supabase
       .from("precios_mercado")
       .select("precio_venta, modelo")
@@ -68,7 +70,15 @@ function IlliaPage() {
       .order("modelo")
       .limit(1)
       .maybeSingle();
-    return Number(parcial?.precio_venta) || 0;
+    if (parcial?.precio_venta) return Number(parcial.precio_venta);
+
+    // Si no encuentra nada, usa precio por defecto según marca
+    const mk = marca.toLowerCase();
+    if (mk.includes("iphone") || mk.includes("apple")) return 1200000;
+    if (mk === "samsung") return 400000;
+    if (mk === "motorola") return 350000;
+    if (mk === "xiaomi") return 380000;
+    return 350000;
   };
 
   const calcularManoObra = (precioVenta: number): number => {
@@ -109,7 +119,6 @@ function IlliaPage() {
     }
 
     const manoObra = calcularManoObra(precioVenta);
-    console.log("DEBUG:", { marca: form.marca, modelo: form.modelo, precioVenta, manoObra });
 
     const ops = resultados.map((r: any) => {
       const precioRepuesto = Number(r.precio_calculado ?? r.precio_proveedor ?? r.precio);
