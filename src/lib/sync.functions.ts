@@ -41,6 +41,7 @@ const CATEGORIAS_FV: { marca: string; tipo: "Módulo" | "Batería"; categoriaId:
   { marca: "Samsung", tipo: "Batería", categoriaId: 3698440 },
   { marca: "Motorola", tipo: "Batería", categoriaId: 3698441 },
   { marca: "LG", tipo: "Batería", categoriaId: 3698442 },
+  { marca: "iPhone", tipo: "Batería", categoriaId: 4383701 },
 ];
 
 async function obtenerSesion(): Promise<{ csrfToken: string; cookie: string }> {
@@ -67,6 +68,19 @@ async function fetchJsonFV(url: string, csrfToken: string, cookie: string): Prom
   });
   if (!res.ok) throw new Error(`HTTP ${res.status} en ${url}`);
   return res.json();
+}
+
+async function fetchHtmlFV(url: string, csrfToken: string, cookie: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": UA, Accept: "text/html,application/xhtml+xml",
+      Referer: `${FV_BASE}/`, "X-Csrf-Token": csrfToken,
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status} en ${url}`);
+  return res.text();
 }
 
 interface FVApiProducto {
@@ -102,6 +116,75 @@ function inferirCalidadFV(nombre: string): string {
   return "Original";
 }
 
+async function sincronizarManualesFV(supabase: any, csrfToken: string, cookie: string): Promise<{ imported: number; updated: number; errors: number }> {
+  const { data: manuales } = await supabase
+    .from("productos_manuales")
+    .select("url")
+    .eq("activo", true)
+    .eq("proveedor", "FV Mayorista");
+
+  if (!manuales || manuales.length === 0) return { imported: 0, updated: 0, errors: 0 };
+
+  let imported = 0, updated = 0, errors = 0;
+  const ahora = new Date().toISOString();
+
+  for (const { url } of manuales) {
+    try {
+      const html = await fetchHtmlFV(url, csrfToken, cookie);
+
+      // Extraer precio del JSON embebido en la página
+      const precioMatch = html.match(/"p_precio"\s*:\s*(\d+)/);
+      const nombreMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+      const stockMatch = html.match(/"s_cantidad"\s*:\s*(\d+)/) || html.match(/"s_ilimitado"\s*:\s*(\d+)/);
+
+      const precio = precioMatch ? Number(precioMatch[1]) : 0;
+      if (precio <= 0) { errors++; continue; }
+
+      const nombre = nombreMatch
+        ? nombreMatch[1].replace(/<[^>]+>/g, "").trim()
+        : url.split("/").filter(Boolean).pop()?.replace(/-/g, " ").toUpperCase() || "Producto";
+
+      const stock = stockMatch ? Number(stockMatch[1]) > 0 : true;
+      const precioCalc = Math.round(precio * 1.21) + 10000;
+
+      // Detectar marca y tipo desde URL
+      let marca = "Desconocida";
+      let tipo: "Módulo" | "Batería" = "Módulo";
+      if (url.includes("iphone") || url.includes("apple")) marca = "iPhone";
+      else if (url.includes("samsung")) marca = "Samsung";
+      else if (url.includes("motorola") || url.includes("moto")) marca = "Motorola";
+      else if (url.includes("xiaomi") || url.includes("redmi")) marca = "Xiaomi";
+      if (url.includes("bateria")) tipo = "Batería";
+
+      const modelo = modeloDesdeNombreFV(nombre, marca);
+      const calidad = inferirCalidadFV(nombre);
+
+      const { data: existing } = await supabase
+        .from("catalogo_repuestos").select("id")
+        .eq("proveedor", "FV Mayorista").eq("url_producto", url).maybeSingle();
+
+      const row = {
+        proveedor: "FV Mayorista", marca, modelo, nombre_completo: nombre,
+        tipo_repuesto: tipo, calidad, precio, precio_proveedor: precio,
+        precio_calculado: precioCalc, stock, url_producto: url,
+        fecha_actualizacion: ahora, ultima_sincronizacion: ahora,
+      };
+
+      if (existing?.id) {
+        const { error } = await supabase.from("catalogo_repuestos").update(row as any).eq("id", existing.id);
+        if (error) errors++; else updated++;
+      } else {
+        const { error } = await supabase.from("catalogo_repuestos").insert(row as any);
+        if (error) errors++; else imported++;
+      }
+    } catch (e: any) {
+      errors++;
+    }
+  }
+
+  return { imported, updated, errors };
+}
+
 export const syncFV = createServerFn({ method: "POST" })
   .inputValidator((d: unknown) => z.object({ offset: z.number().int().min(0).default(0) }).parse(d ?? {}))
   .middleware([requireSupabaseAuth])
@@ -113,10 +196,21 @@ export const syncFV = createServerFn({ method: "POST" })
     let imported = 0, updated = 0, errors = 0;
     const errorSamples: string[] = [];
     const categoriaIdx = data.offset;
+
     if (categoriaIdx >= CATEGORIAS_FV.length) {
+      // Sincronizar productos manuales al finalizar
+      const { csrfToken, cookie } = await obtenerSesion();
+      const manuales = await sincronizarManualesFV(supabase, csrfToken, cookie);
       await supabase.from("proveedores_config").update({ estado: "sincronizado", ultima_sincronizacion: ahora }).eq("nombre", proveedor);
-      return { proveedor, ok: true, imported, updated, errors, totalDiscovered: CATEGORIAS_FV.length, processed: CATEGORIAS_FV.length, done: true, nextOffset: null, message: "FV Mayorista sincronizado completamente." };
+      return {
+        proveedor, ok: true,
+        imported: manuales.imported, updated: manuales.updated, errors: manuales.errors,
+        totalDiscovered: CATEGORIAS_FV.length, processed: CATEGORIAS_FV.length,
+        done: true, nextOffset: null,
+        message: `FV sincronizado. Manuales: +${manuales.imported} nuevos, ~${manuales.updated} actualizados.`,
+      };
     }
+
     const cat = CATEGORIAS_FV[categoriaIdx];
     try {
       const { csrfToken, cookie } = await obtenerSesion();
@@ -130,12 +224,17 @@ export const syncFV = createServerFn({ method: "POST" })
           const stock = tieneStockFV(p);
           const precio = precioRealFV(p);
           if (precio <= 0) continue;
-          const precioCalc = precio + 10000;
+          const precioCalc = Math.round(precio * 1.21) + 10000;
           const urlProducto = `${FV_BASE}/${cat.tipo === "Batería" ? "bateria-originales" : "modulos-originales"}/${cat.marca.toLowerCase()}/${p.p_link}`;
           const modelo = modeloDesdeNombreFV(p.p_nombre, cat.marca);
           const calidad = inferirCalidadFV(p.p_nombre);
           const { data: existing } = await supabase.from("catalogo_repuestos").select("id").eq("proveedor", proveedor).eq("url_producto", urlProducto).maybeSingle();
-          const row = { proveedor, marca: cat.marca, modelo, nombre_completo: p.p_nombre, tipo_repuesto: cat.tipo, calidad, precio, precio_proveedor: precio, precio_calculado: precioCalc, stock, url_producto: urlProducto, fecha_actualizacion: ahora, ultima_sincronizacion: ahora };
+          const row = {
+            proveedor, marca: cat.marca, modelo, nombre_completo: p.p_nombre,
+            tipo_repuesto: cat.tipo, calidad, precio, precio_proveedor: precio,
+            precio_calculado: precioCalc, stock, url_producto: urlProducto,
+            fecha_actualizacion: ahora, ultima_sincronizacion: ahora,
+          };
           if (existing?.id) {
             const { error } = await supabase.from("catalogo_repuestos").update(row as any).eq("id", existing.id);
             if (error) { errorSamples.push(error.message); errors++; } else updated++;
@@ -151,10 +250,23 @@ export const syncFV = createServerFn({ method: "POST" })
       errors++;
       errorSamples.push(`${cat.marca} (${cat.tipo}): ${e.message}`);
     }
+
     const nextOffset = categoriaIdx + 1;
     const done = nextOffset >= CATEGORIAS_FV.length;
-    await supabase.from("proveedores_config").update({ estado: done ? "sincronizado" : "sincronizando", ultima_sincronizacion: ahora, notas: JSON.stringify({ last_offset: done ? 0 : nextOffset, last_batch_at: ahora }) }).eq("nombre", proveedor);
-    return { proveedor, ok: true, imported, updated, errors, totalDiscovered: CATEGORIAS_FV.length, processed: nextOffset, nextOffset: done ? null : nextOffset, done, errorSamples: errorSamples.length ? errorSamples.slice(0, 5) : undefined, message: done ? `FV sincronizado. +${imported} nuevos, ~${updated} actualizados.` : `${cat.marca} ${cat.tipo} (${categoriaIdx + 1}/${CATEGORIAS_FV.length}): +${imported} nuevos, ~${updated} actualizados.` };
+    await supabase.from("proveedores_config").update({
+      estado: done ? "sincronizando_manuales" : "sincronizando",
+      ultima_sincronizacion: ahora,
+      notas: JSON.stringify({ last_offset: done ? 0 : nextOffset, last_batch_at: ahora }),
+    }).eq("nombre", proveedor);
+
+    return {
+      proveedor, ok: true, imported, updated, errors,
+      totalDiscovered: CATEGORIAS_FV.length, processed: nextOffset,
+      nextOffset: done ? CATEGORIAS_FV.length : nextOffset,
+      done: false,
+      errorSamples: errorSamples.length ? errorSamples.slice(0, 5) : undefined,
+      message: `${cat.marca} ${cat.tipo} (${categoriaIdx + 1}/${CATEGORIAS_FV.length}): +${imported} nuevos, ~${updated} actualizados.`,
+    };
   });
 
 export const getFVStatus = createServerFn({ method: "GET" })
@@ -165,7 +277,16 @@ export const getFVStatus = createServerFn({ method: "GET" })
     const { count } = await supabase.from("catalogo_repuestos").select("*", { count: "exact", head: true }).eq("proveedor", "FV Mayorista");
     let parsed: any = {};
     try { parsed = cfg?.notas ? JSON.parse(cfg.notas) : {}; } catch { parsed = {}; }
-    return { estado: cfg?.estado ?? "no_configurado", ultima_sincronizacion: cfg?.ultima_sincronizacion ?? null, cargados: count ?? 0, last_offset: Number(parsed.last_offset) || 0, total_discovered: CATEGORIAS_FV.length, last_error: parsed.last_error ?? null, last_batch_at: parsed.last_batch_at ?? null, logs: [] };
+    return {
+      estado: cfg?.estado ?? "no_configurado",
+      ultima_sincronizacion: cfg?.ultima_sincronizacion ?? null,
+      cargados: count ?? 0,
+      last_offset: Number(parsed.last_offset) || 0,
+      total_discovered: CATEGORIAS_FV.length,
+      last_error: parsed.last_error ?? null,
+      last_batch_at: parsed.last_batch_at ?? null,
+      logs: [],
+    };
   });
 
 export const resetFVSync = createServerFn({ method: "POST" })
