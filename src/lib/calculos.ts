@@ -9,9 +9,9 @@ export function calcularGanancia(precioRepuesto: number): number {
   if (precioRepuesto <= 89999) return 80000;
   if (precioRepuesto <= 99999) return 90000;
   if (precioRepuesto <= 199999) return 100000;
-  return 150000;
+  if (precioRepuesto <= 299999) return 150000;
+  return 200000;
 }
-
 export function calcularManoObraAndroid(precioVenta: number, marca?: string, modelo?: string): number {
   const m = (modelo || "").toLowerCase();
   const mk = (marca || "").toLowerCase();
@@ -30,7 +30,7 @@ export function calcularManoObraAndroid(precioVenta: number, marca?: string, mod
 export function calcularManoObraModuloIphone(modelo: string, conIC: boolean): number {
   const m = modelo.toUpperCase();
   const num = parseInt(m.replace(/[^0-9]/g, ""), 10);
-  if (num >= 17) return conIC ? 150000 : 50000;
+  if (num >= 17) return conIC ? 150000 : 90000;
   if (num >= 15) return conIC ? 90000 : 50000;
   return conIC ? 80000 : 50000;
 }
