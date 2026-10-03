@@ -52,7 +52,6 @@ function IlliaPage() {
   };
 
   const buscarPrecioEnTabla = async (marca: string, modelo: string): Promise<number> => {
-    // Primero busca coincidencia exacta
     const { data: exacto } = await supabase
       .from("precios_mercado")
       .select("precio_venta")
@@ -61,7 +60,6 @@ function IlliaPage() {
       .maybeSingle();
     if (exacto?.precio_venta) return Number(exacto.precio_venta);
 
-    // Si no encuentra, busca parcial
     const { data: parcial } = await supabase
       .from("precios_mercado")
       .select("precio_venta, modelo")
@@ -72,7 +70,6 @@ function IlliaPage() {
       .maybeSingle();
     if (parcial?.precio_venta) return Number(parcial.precio_venta);
 
-    // Si no encuentra nada, usa precio por defecto según marca
     const mk = marca.toLowerCase();
     if (mk.includes("iphone") || mk.includes("apple")) return 1200000;
     if (mk === "samsung") return 400000;
@@ -112,7 +109,33 @@ function IlliaPage() {
 
     if (error) { toast.error(error.message); return; }
 
-    const resultados = data || [];
+    let resultados = data || [];
+
+    // Filtrar baterías iPhone por condición
+    if (esIphone && form.tipo_reparacion === "Batería") {
+      resultados = resultados.filter((r: any) => {
+        const cal = (r.calidad || "").toLowerCase();
+        if (form.con_condicion) {
+          return cal.includes("con condición") || cal.includes("con condicion") || cal === "original";
+        } else {
+          return cal.includes("sin condición") || cal.includes("sin condicion");
+        }
+      });
+    }
+
+    // Filtrar módulos iPhone por IC
+    if (esIphone && form.tipo_reparacion === "Módulo") {
+      resultados = resultados.filter((r: any) => {
+        const cal = (r.calidad || "").toLowerCase();
+        const nom = (r.nombre_completo || r.modelo || "").toLowerCase();
+        if (form.con_ic) {
+          return !nom.includes("sin ic") && !cal.includes("sin ic");
+        } else {
+          return !nom.includes("con ic") && !cal.includes("con ic");
+        }
+      });
+    }
+
     if (resultados.length === 0) {
       toast.error("Sin coincidencias en el catálogo");
       return;
