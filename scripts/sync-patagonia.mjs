@@ -33,19 +33,59 @@ const CATEGORIAS = [
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+let enriquecerOK = 0;
+let enriquecerFail = 0;
+
 function inferirCalidad(nombre, cat) {
   if (/oled/i.test(nombre)) return "OLED";
   if (/incell/i.test(nombre)) return "Incell";
   if (/service.?pack/i.test(nombre)) return "Service Pack";
-
-  // Lógica especial para baterías iPhone
   if (cat && cat.tipo === "Batería" && cat.marca === "iPhone") {
     if (/sin.?flex/i.test(nombre)) return "Con condición";
     if (/con.?flex/i.test(nombre)) return "Sin condición";
-    return "Con condición"; // autoprogramable y resto por defecto
+    return "Con condición";
   }
-
   return "Calidad Original";
+}
+
+function parsearMetaTags(html) {
+  const imgMatch =
+    html.match(/<meta\s+property="og:image"\s+content="([^"]+)"/i) ||
+    html.match(/<meta\s+content="([^"]+)"\s+property="og:image"/i);
+  const descMatch =
+    html.match(/<meta\s+property="og:description"\s+content="([^"]+)"/i) ||
+    html.match(/<meta\s+content="([^"]+)"\s+property="og:description"/i) ||
+    html.match(/<meta\s+name="description"\s+content="([^"]+)"/i);
+  const decode = (s) =>
+    s ? s.replace(/&quot;/g, '"').replace(/&amp;/g, "&").replace(/&#39;/g, "'").trim() : null;
+  return {
+    imagen_url: imgMatch ? decode(imgMatch[1]) : null,
+    descripcion: descMatch ? decode(descMatch[1]) : null,
+  };
+}
+
+async function enriquecerProducto(page, producto, intento = 1) {
+  try {
+    await page.goto(producto.url, { waitUntil: "networkidle2", timeout: 45000 });
+    const html = await page.content();
+    const meta = parsearMetaTags(html);
+    producto.imagen_url = meta.imagen_url;
+    producto.descripcion = meta.descripcion;
+    if (meta.imagen_url || meta.descripcion) enriquecerOK++;
+    else enriquecerFail++;
+  } catch (e) {
+    if (intento < 2) {
+      console.log(`      Reintentando (${e.message})...`);
+      await new Promise((r) => setTimeout(r, 2000));
+      return enriquecerProducto(page, producto, intento + 1);
+    }
+    console.error(`      Error trayendo foto/descripción de ${producto.url}: ${e.message}`);
+    producto.imagen_url = null;
+    producto.descripcion = null;
+    enriquecerFail++;
+  }
+  await new Promise((r) => setTimeout(r, 1200));
+  return producto;
 }
 
 function parsearProductos(html, cat) {
@@ -95,12 +135,13 @@ function parsearProductoIndividual(html, url) {
     ? tituloMatch[1].replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").trim()
     : url.split("/").filter(Boolean).pop()?.replace(/-/g, " ") || "Producto";
 
-  // Determinar si es batería iPhone para calidad
   const esIphoneBateria = url.includes("iphone") && url.includes("bateria");
   const cat = esIphoneBateria ? { tipo: "Batería", marca: "iPhone" } : null;
   const calidad = inferirCalidad(nombre, cat);
 
-  return { nombre, precio, url, stock, calidad };
+  const meta = parsearMetaTags(html);
+
+  return { nombre, precio, url, stock, calidad, imagen_url: meta.imagen_url, descripcion: meta.descripcion };
 }
 
 async function obtenerTodasLasPaginas(page, urlBase, cat) {
@@ -153,7 +194,7 @@ async function sincronizarProductosManuales(page) {
   for (const { url } of manuales) {
     console.log(`  Visitando: ${url}`);
     try {
-      await page.goto(url, { waitUntil: "networkidle2", timeout: 30000 });
+      await page.goto(url, { waitUntil: "networkidle2", timeout: 45000 });
       const html = await page.content();
       const producto = parsearProductoIndividual(html, url);
 
@@ -201,6 +242,8 @@ async function sincronizarProductosManuales(page) {
         precio_calculado: producto.precio,
         stock: producto.stock,
         url_producto: url,
+        imagen_url: producto.imagen_url,
+        descripcion: producto.descripcion,
         fecha_actualizacion: ahora,
         ultima_sincronizacion: ahora,
       };
@@ -216,7 +259,7 @@ async function sincronizarProductosManuales(page) {
       console.error(`    Error:`, e.message);
       errores++;
     }
-    await new Promise(r => setTimeout(r, 800));
+    await new Promise(r => setTimeout(r, 1200));
   }
 
   console.log(`  Manuales: +${importados} nuevos, ~${actualizados} actualizados, ${errores} errores`);
@@ -251,6 +294,9 @@ async function sincronizar() {
       for (const p of productos) {
         if (!p.stock) continue;
 
+        console.log(`    Trayendo foto/descripción: ${p.nombre}`);
+        await enriquecerProducto(page, p);
+
         const modelo = p.nombre
           .replace(/^(Módulo|Modulo|Batería|Bateria|Pantalla)\s+/i, "")
           .replace(/^(Samsung|Motorola|iPhone|Xiaomi|LG|Huawei|Alcatel|Infinix)\s+/i, "")
@@ -276,6 +322,8 @@ async function sincronizar() {
           precio_calculado: p.precio,
           stock: true,
           url_producto: p.url,
+          imagen_url: p.imagen_url,
+          descripcion: p.descripcion,
           fecha_actualizacion: ahora,
           ultima_sincronizacion: ahora,
         };
@@ -302,6 +350,7 @@ async function sincronizar() {
   console.log(`  ~${totalUpdated} actualizados`);
   console.log(`  ${totalSinStock} sin stock omitidos`);
   console.log(`  ${totalErrors} errores`);
+  console.log(`  Foto/descripción: ${enriquecerOK} ok, ${enriquecerFail} fallidos`);
 }
 
 sincronizar().catch(console.error);
