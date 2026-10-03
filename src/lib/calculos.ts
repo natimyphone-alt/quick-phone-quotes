@@ -38,7 +38,7 @@ export function calcularManoObraModuloIphone(modelo: string, conIC: boolean): nu
 export function calcularManoObraBateriaIphone(modelo: string, conCondicion: boolean): number {
   const m = modelo.toUpperCase();
   const num = parseInt(m.replace(/[^0-9]/g, ""), 10);
-  if (num >= 16) return conCondicion ? 95000 : 70000;
+  if (num >= 15) return conCondicion ? 95000 : 70000;
   return conCondicion ? 60000 : 40000;
 }
 
