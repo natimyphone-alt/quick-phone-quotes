@@ -42,7 +42,7 @@ export function calcularOpcion(input: {
 
   const envio = input.envio !== undefined
     ? input.envio
-    : input.proveedor === "Patagonia Cell" ? ENVIO_PATAGONIA : ENVIO_FV;
+    : (input.proveedor === "Patagonia Cell" || input.proveedor === "MTP" || input.proveedor === "OK") ? ENVIO_PATAGONIA : ENVIO_FV;
 
   const ganancia = calcularGanancia(precioRepuesto);
   const subtotal = precioRepuesto + input.manoObra + envio + ganancia;
