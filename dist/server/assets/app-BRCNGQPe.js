@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { u as useAuth } from "./use-auth-GpmAL4wB.js";
 import { s as supabase } from "./client-CzxaLLtB.js";
 import { B as Button } from "./button-BC9oXVxV.js";
-import { LogOut, Home, Package, History, Settings, ClipboardList } from "lucide-react";
+import { LogOut, Home, MessageSquareWarning, Package, History, Settings, ClipboardList } from "lucide-react";
 import "@supabase/supabase-js";
 import "@radix-ui/react-slot";
 import "class-variance-authority";
@@ -42,6 +42,10 @@ function AppLayout() {
     icon: Home,
     exact: true
   }, {
+    to: "/app/reclamos",
+    label: "Reclamos",
+    icon: MessageSquareWarning
+  }, {
     to: "/app/catalogo",
     label: "Catálogo",
     icon: Package
@@ -74,7 +78,7 @@ function AppLayout() {
       ] })
     ] }) }),
     /* @__PURE__ */ jsx("main", { className: "flex-1 max-w-6xl w-full mx-auto p-4 pb-24 sm:pb-4", children: /* @__PURE__ */ jsx(Outlet, {}) }),
-    /* @__PURE__ */ jsx("nav", { className: "fixed bottom-0 inset-x-0 bg-card border-t shadow-lg sm:hidden z-30", children: /* @__PURE__ */ jsx("div", { className: "grid grid-cols-4 max-w-md mx-auto", children: navItems.slice(0, 4).map((item) => {
+    /* @__PURE__ */ jsx("nav", { className: "fixed bottom-0 inset-x-0 bg-card border-t shadow-lg sm:hidden z-30", children: /* @__PURE__ */ jsx("div", { className: "grid grid-cols-5 max-w-md mx-auto", children: navItems.slice(0, 5).map((item) => {
       const Icon = item.icon;
       const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
       return /* @__PURE__ */ jsxs(Link, { to: item.to, className: `flex flex-col items-center py-2 text-xs ${active ? "text-primary font-medium" : "text-muted-foreground"}`, children: [

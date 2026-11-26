@@ -2,7 +2,7 @@ import { jsxs, jsx } from "react/jsx-runtime";
 import { Link } from "@tanstack/react-router";
 import { C as Card, d as CardContent } from "./card-DQ5v2DYb.js";
 import { u as useAuth } from "./use-auth-GpmAL4wB.js";
-import { Wrench, ClipboardList, Package, History, Settings } from "lucide-react";
+import { Wrench, ClipboardList, MessageSquareWarning, Package, History, Settings } from "lucide-react";
 import "react";
 import "./utils-H80jjgLf.js";
 import "clsx";
@@ -26,6 +26,12 @@ function Home() {
     desc: "Ingreso y seguimiento de equipos",
     icon: ClipboardList,
     color: "from-primary to-accent"
+  }, {
+    to: "/app/reclamos",
+    title: "Reclamos",
+    desc: "Cambios, notas de credito y reclamos de clientes",
+    icon: MessageSquareWarning,
+    color: "from-accent to-primary"
   }, {
     to: "/app/catalogo",
     title: "Catalogo de Repuestos",

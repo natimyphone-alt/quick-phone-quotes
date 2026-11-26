@@ -13,6 +13,7 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AppRouteImport } from './routes/app'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppIndexRouteImport } from './routes/app.index'
+import { Route as AppReclamosRouteImport } from './routes/app.reclamos'
 import { Route as AppOrdenesRouteImport } from './routes/app.ordenes'
 import { Route as AppIlliaRouteImport } from './routes/app.illia'
 import { Route as AppHistorialRouteImport } from './routes/app.historial'
@@ -38,6 +39,11 @@ const IndexRoute = IndexRouteImport.update({
 const AppIndexRoute = AppIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppReclamosRoute = AppReclamosRouteImport.update({
+  id: '/reclamos',
+  path: '/reclamos',
   getParentRoute: () => AppRoute,
 } as any)
 const AppOrdenesRoute = AppOrdenesRouteImport.update({
@@ -81,6 +87,7 @@ export interface FileRoutesByFullPath {
   '/app/historial': typeof AppHistorialRoute
   '/app/illia': typeof AppIlliaRoute
   '/app/ordenes': typeof AppOrdenesRoute
+  '/app/reclamos': typeof AppReclamosRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRoutesByTo {
@@ -92,6 +99,7 @@ export interface FileRoutesByTo {
   '/app/historial': typeof AppHistorialRoute
   '/app/illia': typeof AppIlliaRoute
   '/app/ordenes': typeof AppOrdenesRoute
+  '/app/reclamos': typeof AppReclamosRoute
   '/app': typeof AppIndexRoute
 }
 export interface FileRoutesById {
@@ -105,6 +113,7 @@ export interface FileRoutesById {
   '/app/historial': typeof AppHistorialRoute
   '/app/illia': typeof AppIlliaRoute
   '/app/ordenes': typeof AppOrdenesRoute
+  '/app/reclamos': typeof AppReclamosRoute
   '/app/': typeof AppIndexRoute
 }
 export interface FileRouteTypes {
@@ -119,6 +128,7 @@ export interface FileRouteTypes {
     | '/app/historial'
     | '/app/illia'
     | '/app/ordenes'
+    | '/app/reclamos'
     | '/app/'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -130,6 +140,7 @@ export interface FileRouteTypes {
     | '/app/historial'
     | '/app/illia'
     | '/app/ordenes'
+    | '/app/reclamos'
     | '/app'
   id:
     | '__root__'
@@ -142,6 +153,7 @@ export interface FileRouteTypes {
     | '/app/historial'
     | '/app/illia'
     | '/app/ordenes'
+    | '/app/reclamos'
     | '/app/'
   fileRoutesById: FileRoutesById
 }
@@ -179,6 +191,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/app/'
       preLoaderRoute: typeof AppIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/app/reclamos': {
+      id: '/app/reclamos'
+      path: '/reclamos'
+      fullPath: '/app/reclamos'
+      preLoaderRoute: typeof AppReclamosRouteImport
       parentRoute: typeof AppRoute
     }
     '/app/ordenes': {
@@ -233,6 +252,7 @@ interface AppRouteChildren {
   AppHistorialRoute: typeof AppHistorialRoute
   AppIlliaRoute: typeof AppIlliaRoute
   AppOrdenesRoute: typeof AppOrdenesRoute
+  AppReclamosRoute: typeof AppReclamosRoute
   AppIndexRoute: typeof AppIndexRoute
 }
 
@@ -243,6 +263,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppHistorialRoute: AppHistorialRoute,
   AppIlliaRoute: AppIlliaRoute,
   AppOrdenesRoute: AppOrdenesRoute,
+  AppReclamosRoute: AppReclamosRoute,
   AppIndexRoute: AppIndexRoute,
 }
 

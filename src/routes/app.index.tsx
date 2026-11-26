@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/use-auth";
-import { Wrench, History, Settings, ClipboardList, Package } from "lucide-react";
+import { Wrench, History, Settings, ClipboardList, Package, MessageSquareWarning } from "lucide-react";
 
 export const Route = createFileRoute("/app/")({
   component: Home,
@@ -13,6 +13,7 @@ function Home() {
   const tiles = [
     { to: "/app/illia", title: "Presupuestos", desc: "Reparaciones con repuestos", icon: Wrench, color: "from-primary to-accent" },
     { to: "/app/ordenes", title: "Ordenes de Trabajo", desc: "Ingreso y seguimiento de equipos", icon: ClipboardList, color: "from-primary to-accent" },
+    { to: "/app/reclamos", title: "Reclamos", desc: "Cambios, notas de credito y reclamos de clientes", icon: MessageSquareWarning, color: "from-accent to-primary" },
     { to: "/app/catalogo", title: "Catalogo de Repuestos", desc: "Proveedores, precios, calidad", icon: Package, color: "from-accent to-primary" },
     { to: "/app/historial", title: "Historial", desc: "Buscar presupuestos", icon: History, color: "from-primary to-primary" },
     ...(isAdmin ? [

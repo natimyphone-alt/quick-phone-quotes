@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { LogOut, Home, ClipboardList, History, Settings, Package } from "lucide-react";
+import { LogOut, Home, ClipboardList, History, Settings, Package, MessageSquareWarning } from "lucide-react";
 
 export const Route = createFileRoute("/app")({
   ssr: false,
@@ -30,6 +30,7 @@ function AppLayout() {
 
   const navItems = [
     { to: "/app", label: "Inicio", icon: Home, exact: true },
+    { to: "/app/reclamos", label: "Reclamos", icon: MessageSquareWarning },
     { to: "/app/catalogo", label: "Catálogo", icon: Package },
     { to: "/app/historial", label: "Historial", icon: History },
     ...(isAdmin
@@ -61,8 +62,8 @@ function AppLayout() {
       </main>
 
       <nav className="fixed bottom-0 inset-x-0 bg-card border-t shadow-lg sm:hidden z-30">
-        <div className="grid grid-cols-4 max-w-md mx-auto">
-          {navItems.slice(0, 4).map(item => {
+        <div className="grid grid-cols-5 max-w-md mx-auto">
+          {navItems.slice(0, 5).map(item => {
             const Icon = item.icon;
             const active = item.exact ? pathname === item.to : pathname.startsWith(item.to);
             return (
