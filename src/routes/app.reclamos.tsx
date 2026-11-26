@@ -66,7 +66,7 @@ const COLOR_UI: Record<string, { label: string; badge: string; box: string }> = 
 
 const labelDe = (lista: { v: string; l: string }[], v: string) => lista.find(x => x.v === v)?.l ?? v;
 const hoyISO = () => new Date().toLocaleDateString("en-CA");
-const fecha = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" }) : "—");
+const fecha = (iso?: string | null) => (iso ? new Date(iso).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short", hour12: false }) : "—");
 const fechaCorta = (d?: string | null) => (d ? new Date(d + "T12:00:00").toLocaleDateString("es-AR") : "—");
 
 // Teléfonos de Neuquén/Río Negro: 2994721359 → 5492994721359 para WhatsApp
@@ -316,7 +316,7 @@ function textoGrupo(c: any, local?: string, conFotos = false) {
     l.push(`Estado: ${labelDe(ESTADOS_PRODUCTO, c.estado_producto)}${c.es_original_marca ? " · Original Apple/Samsung" : ""}`);
     if (c.queda_saldo_favor) l.push("Le queda saldo a favor");
   }
-  l.push(`Qué pasa: ${c.que_pasa}`);
+  l.push(`${c.tipo === "reparacion" ? "Qué falla ahora" : "Qué pasa"}: ${c.que_pasa}`);
   l.push(`Qué probamos: ${c.que_probamos}`);
   l.push(`Pide: ${labelDe(QUE_PIDE, c.que_pide)}`);
   if (c.amenaza_externa) l.push("ATENCIÓN: nombró Defensa del Consumidor, abogado o redes");
@@ -324,6 +324,38 @@ function textoGrupo(c: any, local?: string, conFotos = false) {
   l.push(c.color === "verde" ? `VERDE – resuelto por el vendedor (${c.motivo_color})` : `Motivo: ${c.motivo_color}`);
   if (!conFotos) l.push("Fotos: en el Hub, caso " + c.numero);
   return l.join("\n");
+}
+
+// Resumen completo del caso: ficha + todo lo que pasó + cómo quedó
+function textoResumen(c: any, eventos: any[]) {
+  const color = COLOR_UI[c.color]?.label ?? "";
+  const ficha = textoGrupo(c).split("\n");
+  // la ficha sin su título ni sus líneas finales (motivo y fotos)
+  const fin = ficha.findIndex(x => x === "");
+  const cuerpo = ficha.slice(1, fin === -1 ? undefined : fin);
+  const l: string[] = [];
+  l.push(`*RESUMEN CASO ${c.numero} – ${color} – ${TIPO_CORTO[c.tipo] ?? c.tipo}*`);
+  l.push(`Estado: ${ESTADOS[c.estado] ?? c.estado}${c.responsable ? ` · Lo tiene: ${c.responsable}` : ""}`);
+  l.push("");
+  l.push(...cuerpo);
+  l.push("");
+  l.push("*Qué pasó:*");
+  eventos.forEach(e => {
+    const cuando = new Date(e.created_at).toLocaleString("es-AR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+    // "Estado: nuevo → con_vanesa" → "Estado: Nuevo → Con Vanesa"
+    const texto = e.tipo === "comentario"
+      ? `"${e.texto}"`
+      : String(e.texto).replace(/\b(nuevo|en_revision|esperando_taller|esperando_cliente|con_vanesa|resuelto|verde|amarillo|rojo)\b/g,
+          (m: string) => ESTADOS[m] ?? COLOR_UI[m]?.label ?? m);
+    l.push(`- ${cuando} · ${e.autor}: ${texto}`);
+  });
+  l.push("");
+  if (c.resolucion) l.push(`*Decisión:* ${c.resolucion}`);
+  if (c.nota_credito_autorizada_por)
+    l.push(`*Nota de crédito:* autorizada por ${c.nota_credito_autorizada_por}${c.nota_credito_nro ? ` · N° ${c.nota_credito_nro}` : ""}`);
+  if (c.estado === "resuelto") l.push(`*Caso cerrado*${c.resuelto_at ? ` el ${fecha(c.resuelto_at)}` : ""}`);
+  else if (c.vence_at) l.push(`Plazo para resolver: ${fecha(c.vence_at)}`);
+  return l.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
 // En el celular abre "Compartir" con las fotos (elegís el grupo de WhatsApp).
@@ -833,7 +865,7 @@ function ListaCasos({ puedeGestionar, recarga }: { puedeGestionar: boolean; reca
       }
 
       {abierto && (
-        <DetalleCaso caso={abierto} puedeGestionar={puedeGestionar} onClose={() => { setAbierto(null); load(); }} onGuardado={() => { setAbierto(null); load(); }} />
+        <DetalleCaso caso={abierto} puedeGestionar={puedeGestionar} onClose={() => { setAbierto(null); load(); }} onGuardado={load} />
       )}
     </div>
   );
@@ -846,8 +878,9 @@ function estaAtrasado(r: any) {
 // ------------------------------------------------------------------
 // 3. Detalle de un caso
 // ------------------------------------------------------------------
-function DetalleCaso({ caso, puedeGestionar, onClose, onGuardado }: { caso: any; puedeGestionar: boolean; onClose: () => void; onGuardado: () => void }) {
+function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }: { caso: any; puedeGestionar: boolean; onClose: () => void; onGuardado: () => void }) {
   const { nombre } = useSesion();
+  const [caso, setCaso] = useState<any>(casoInicial);
   const [eventos, setEventos] = useState<any[]>([]);
   const [urls, setUrls] = useState<string[]>([]);
   const [comentario, setComentario] = useState("");
@@ -893,8 +926,20 @@ function DetalleCaso({ caso, puedeGestionar, onClose, onGuardado }: { caso: any;
     const { error } = await db.from("reclamos").update({ ...g, responsable: caso.responsable || nombre, modificado_por: nombre, ...extra }).eq("id", caso.id);
     setGuardando(false);
     if (error) return toast.error(error.message);
-    toast.success(`Caso ${caso.numero} actualizado`);
+    const { data: nuevo } = await db.from("reclamos").select("*, sucursales(nombre)").eq("id", caso.id).single();
+    if (nuevo) setCaso(nuevo);
+    await cargarEventos();
+    toast.success(`Caso ${caso.numero} actualizado. Mandá el resumen al grupo.`);
     onGuardado();
+  };
+
+  const mandarResumen = async () => {
+    const ok = await compartirEnGrupo(textoResumen(caso, eventos));
+    if (ok) toast.success("Resumen listo para mandar");
+  };
+  const copiarResumen = async () => {
+    await navigator.clipboard.writeText(textoResumen(caso, eventos));
+    toast.success("Resumen copiado");
   };
 
   const autorizarNC = () => guardar({ nota_credito_autorizada_por: nombre || "encargado" });
@@ -1012,6 +1057,20 @@ function DetalleCaso({ caso, puedeGestionar, onClose, onGuardado }: { caso: any;
               </CardContent>
             </Card>
           )}
+
+          <Card className="border-primary/40">
+            <CardContent className="p-3 space-y-2">
+              <h3 className="font-semibold">Resumen del caso</h3>
+              <p className="text-xs text-muted-foreground">
+                Cuenta todo lo que pasó, listo para mandar al grupo de pendientes. Se actualiza solo con cada cambio o comentario.
+              </p>
+              <pre className="whitespace-pre-wrap text-xs bg-muted rounded-md p-3 font-sans max-h-64 overflow-y-auto">{textoResumen(caso, eventos)}</pre>
+              <div className="flex flex-wrap gap-2">
+                <Button size="sm" onClick={mandarResumen}><Send className="w-4 h-4 mr-1" />Mandar resumen al grupo</Button>
+                <Button size="sm" variant="outline" onClick={copiarResumen}>Copiar</Button>
+              </div>
+            </CardContent>
+          </Card>
 
           <div className="space-y-2">
             <h3 className="font-semibold">Historial</h3>
