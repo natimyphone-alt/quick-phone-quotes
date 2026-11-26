@@ -13,7 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertTriangle, Camera, CheckCircle2, Clock, LogOut, MessageCircle, RefreshCw, Search, Send, X } from "lucide-react";
+import { Camera, CheckCircle2, Clock, LogOut, MessageCircle, RefreshCw, Search, Send, X } from "lucide-react";
 import { abrirWhatsApp } from "@/lib/whatsapp";
 
 export const Route = createFileRoute("/app/reclamos")({
@@ -583,16 +583,6 @@ function NuevoCaso({ puedeElegirLocal, onCreado, irACasos }: { puedeElegirLocal:
 
   return (
     <div className="space-y-4">
-      <Card className="border-destructive/40">
-        <CardContent className="p-3 flex gap-2 text-sm">
-          <AlertTriangle className="w-5 h-5 text-destructive shrink-0" />
-          <span>
-            <b>Si hay riesgo físico</b> (violencia, robo, amenaza en el local): no cargues nada. Ponete a salvo y llamá a Vanesa,
-            a Natalia o al 911.
-          </span>
-        </CardContent>
-      </Card>
-
       <Card>
         <CardHeader><CardTitle>Ficha del caso</CardTitle></CardHeader>
         <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
