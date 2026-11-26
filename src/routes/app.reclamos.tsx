@@ -103,6 +103,30 @@ async function comprimirImagen(file: File): Promise<Blob> {
 }
 
 // ------------------------------------------------------------------
+// Locales (se leen con una función de la base)
+// ------------------------------------------------------------------
+type Local = { id: string; nombre: string };
+let localesCache: Promise<Local[]> | null = null;
+function cargarLocales(): Promise<Local[]> {
+  if (!localesCache) {
+    localesCache = (db.rpc("reclamos_sucursales") as Promise<any>).then(({ data, error }: any) => {
+      if (error) {
+        localesCache = null;
+        toast.error("No se pudieron leer los locales: falta correr la actualización de locales en Supabase");
+        return [];
+      }
+      return (data || []).map((x: any) => ({ id: String(x.id), nombre: x.nombre }));
+    });
+  }
+  return localesCache as Promise<Local[]>;
+}
+// Agrega el nombre del local a cada caso
+async function conNombreLocal<T extends { sucursal_id?: any }>(casos: T[]): Promise<(T & { sucursal_nombre?: string })[]> {
+  const locales = await cargarLocales();
+  return casos.map(c => ({ ...c, sucursal_nombre: locales.find(l => l.id === String(c.sucursal_id))?.nombre }));
+}
+
+// ------------------------------------------------------------------
 // Sesión de la pantalla: local + nombre (todos usan el mismo usuario del Hub)
 // ------------------------------------------------------------------
 type Sesion = { modo: "local" | "encargado"; sucursal_id?: string; sucursal_nombre?: string; nombre: string; hasta: number };
@@ -133,14 +157,18 @@ const useSesion = () => useContext(SesionCtx);
 // Página
 // ------------------------------------------------------------------
 function ReclamosPage() {
-  const { isAdmin, nombre } = useAuth();
+  const { user, isAdmin, nombre } = useAuth();
   const [rol, setRol] = useState<string | null>(null);
   const [tab, setTab] = useState("nuevo");
   const [recarga, setRecarga] = useState(0);
   const [sesion, setSesion] = useState<Sesion | null>(null);
 
+  // Se vuelve a consultar el rol cuando cambia el usuario (por ejemplo, al terminar de iniciar sesión)
   useEffect(() => {
+    if (!user) return;
     db.rpc("reclamos_rol").then(({ data }: any) => setRol(data || ""));
+  }, [user?.id]);
+  useEffect(() => {
     setSesion(leerSesion());
   }, []);
 
@@ -220,8 +248,7 @@ function Entrada({ onEntrar }: { onEntrar: (s: Sesion) => void }) {
   const [validando, setValidando] = useState(false);
 
   useEffect(() => {
-    supabase.from("sucursales").select("id, nombre").eq("activo", true).order("nombre")
-      .then(({ data }) => setSucursales(data || []));
+    cargarLocales().then(setSucursales);
     db.rpc("reclamos_pines_configurados").then(({ data, error }: any) => {
       if (error) toast.error("Falta correr la actualización v4 de Reclamos en Supabase");
       setConPin(((data || []) as any[]).map(x => (typeof x === "string" ? x : x.reclamos_pines_configurados)));
@@ -305,7 +332,7 @@ function textoGrupo(c: any, local?: string, conFotos = false) {
   const color = COLOR_UI[c.color]?.label ?? "";
   const l: string[] = [];
   l.push(`*CASO ${c.numero} – ${color} – ${TIPO_CORTO[c.tipo] ?? c.tipo}*`);
-  l.push(`Local: ${local || c.sucursales?.nombre || c.sucursal_nombre || "-"} · Atiende: ${c.atendido_por}`);
+  l.push(`Local: ${local || c.sucursal_nombre || "-"} · Atiende: ${c.atendido_por}`);
   l.push(`Cliente: ${c.cliente_nombre} · ${c.cliente_telefono}`);
   if (c.tipo === "reparacion") {
     l.push(`Orden y equipo: ${c.producto_u_orden}`);
@@ -459,8 +486,7 @@ function NuevoCaso({ puedeElegirLocal, onCreado, irACasos }: { puedeElegirLocal:
   const [fotosCreado, setFotosCreado] = useState<File[]>([]);
 
   useEffect(() => {
-    supabase.from("sucursales").select("id, nombre").eq("activo", true).order("nombre")
-      .then(({ data }) => setSucursales(data || []));
+    cargarLocales().then(setSucursales);
   }, []);
   useEffect(() => {
     setForm(f => ({ ...f, sucursal_id: f.sucursal_id || sucursalId || "", atendido_por: f.atendido_por || nombre || "" }));
@@ -806,13 +832,13 @@ function ListaCasos({ puedeGestionar, recarga }: { puedeGestionar: boolean; reca
   const sesion = useSesion();
   const load = async () => {
     setLoading(true);
-    let query = db.from("reclamos").select("*, sucursales(nombre)").order("created_at", { ascending: false }).limit(300);
+    let query = db.from("reclamos").select("*").order("created_at", { ascending: false }).limit(300);
     if (!verResueltos) query = query.neq("estado", "resuelto");
     if (sesion.modo === "local") query = query.eq("sucursal_id", sesion.sucursal_id);
     const { data, error } = await query;
     setLoading(false);
     if (error) return toast.error(error.message);
-    setItems(data || []);
+    setItems(await conNombreLocal(data || []));
   };
   useEffect(() => { load(); }, [verResueltos, recarga]);
 
@@ -858,7 +884,7 @@ function ListaCasos({ puedeGestionar, recarga }: { puedeGestionar: boolean; reca
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge className={ui.badge}>{ui.label}</Badge>
                       <span className="font-semibold">{r.numero}</span>
-                      <span className="text-sm text-muted-foreground">{r.sucursales?.nombre}</span>
+                      <span className="text-sm text-muted-foreground">{r.sucursal_nombre}</span>
                       <Badge variant="outline">{ESTADOS[r.estado]}</Badge>
                       {atrasado && <Badge className="bg-destructive text-destructive-foreground"><Clock className="w-3 h-3 mr-1" />Atrasado</Badge>}
                       {!r.avisado_grupo_at && <Badge variant="outline" className="border-destructive text-destructive">Sin avisar al grupo</Badge>}
@@ -935,8 +961,8 @@ function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }:
     const { error } = await db.from("reclamos").update({ ...g, responsable: caso.responsable || nombre, modificado_por: nombre, ...extra }).eq("id", caso.id);
     setGuardando(false);
     if (error) return toast.error(error.message);
-    const { data: nuevo } = await db.from("reclamos").select("*, sucursales(nombre)").eq("id", caso.id).single();
-    if (nuevo) setCaso(nuevo);
+    const { data: nuevo } = await db.from("reclamos").select("*").eq("id", caso.id).single();
+    if (nuevo) setCaso((await conNombreLocal([nuevo]))[0]);
     await cargarEventos();
     toast.success(`Caso ${caso.numero} actualizado. Mandá el resumen al grupo.`);
     onGuardado();
@@ -964,7 +990,7 @@ function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }:
         <DialogHeader>
           <DialogTitle className="flex flex-wrap items-center gap-2">
             <Badge className={ui.badge}>{ui.label}</Badge> {caso.numero}
-            <span className="text-sm font-normal text-muted-foreground">{caso.sucursales?.nombre} · {ESTADOS[caso.estado]}</span>
+            <span className="text-sm font-normal text-muted-foreground">{caso.sucursal_nombre} · {ESTADOS[caso.estado]}</span>
           </DialogTitle>
         </DialogHeader>
 
@@ -1197,7 +1223,7 @@ function PinesCard() {
 
   const load = async () => {
     const [{ data: s }, { data: p }] = await Promise.all([
-      supabase.from("sucursales").select("id, nombre").eq("activo", true).order("nombre"),
+      cargarLocales().then(data => ({ data })),
       db.rpc("reclamos_pines_configurados"),
     ]);
     setSucursales(s || []);
