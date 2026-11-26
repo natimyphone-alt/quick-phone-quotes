@@ -41,6 +41,15 @@ const ESTADOS_PRODUCTO = [
   { v: "danado", l: "Dañado (golpe, roto, mojado)" },
   { v: "incompleto", l: "Le falta algo (caja, cable, accesorio)" },
 ];
+// Cómo vuelve un equipo reparado (reingresos)
+const ESTADOS_EQUIPO = [
+  { v: "eq_igual", l: "Igual que cuando se entregó (sin marcas nuevas)" },
+  { v: "eq_golpeado", l: "Con golpes, rayas o vidrio roto nuevos" },
+  { v: "eq_mojado", l: "Mojado o con señales de humedad" },
+  { v: "eq_manipulado", l: "Abierto o tocado por otro técnico" },
+  { v: "eq_falta_pieza", l: "Le falta algo (tornillos, tapa, bandeja SIM)" },
+];
+const ESTADOS_TODOS = [...ESTADOS_PRODUCTO, ...ESTADOS_EQUIPO];
 const QUE_PIDE = [
   { v: "cambio", l: "Cambiarlo por otro producto" },
   { v: "nota_credito", l: "Nota de crédito" },
@@ -309,11 +318,11 @@ function textoGrupo(c: any, local?: string, conFotos = false) {
     l.push(`Seña: ${c.rep_sena || "-"}`);
     l.push(`Saldo: ${c.rep_saldo || "-"}`);
     if (c.rep_garantia) l.push(`Garantía informada: ${c.rep_garantia}`);
-    l.push(`Cómo vuelve: ${labelDe(ESTADOS_PRODUCTO, c.estado_producto)}`);
+    l.push(`Cómo vuelve: ${labelDe(ESTADOS_TODOS, c.estado_producto)}`);
   } else {
     l.push(`Producto: ${c.producto_u_orden}`);
     l.push(`Compró: ${fechaCorta(c.fecha_compra)} · Pagó con: ${c.forma_pago} · Ticket: ${c.con_ticket ? "Sí" : "No"}`);
-    l.push(`Estado: ${labelDe(ESTADOS_PRODUCTO, c.estado_producto)}${c.es_original_marca ? " · Original Apple/Samsung" : ""}`);
+    l.push(`Estado: ${labelDe(ESTADOS_TODOS, c.estado_producto)}${c.es_original_marca ? " · Original Apple/Samsung" : ""}`);
     if (c.queda_saldo_favor) l.push("Le queda saldo a favor");
   }
   l.push(`${c.tipo === "reparacion" ? "Qué falla ahora" : "Qué pasa"}: ${c.que_pasa}`);
@@ -572,7 +581,7 @@ function NuevoCaso({ puedeElegirLocal, onCreado, irACasos }: { puedeElegirLocal:
           <F label="Quién atiende *"><Input value={form.atendido_por} onChange={e => set("atendido_por", e.target.value)} /></F>
 
           <F label="Tipo de caso *" full>
-            <Select value={form.tipo} onValueChange={v => set("tipo", v)}>
+            <Select value={form.tipo} onValueChange={v => setForm(f => ({ ...f, tipo: v, estado_producto: "" }))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>{TIPOS.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
             </Select>
@@ -627,7 +636,7 @@ function NuevoCaso({ puedeElegirLocal, onCreado, irACasos }: { puedeElegirLocal:
               <F label="Estado del equipo hoy *" full>
                 <Select value={form.estado_producto} onValueChange={v => set("estado_producto", v)}>
                   <SelectTrigger><SelectValue placeholder="Elegí" /></SelectTrigger>
-                  <SelectContent>{ESTADOS_PRODUCTO.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
+                  <SelectContent>{ESTADOS_EQUIPO.map(o => <SelectItem key={o.v} value={o.v}>{o.l}</SelectItem>)}</SelectContent>
                 </Select>
               </F>
             </>
@@ -977,14 +986,14 @@ function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }:
                 <Dato l="Seña" v={caso.rep_sena || "—"} />
                 <Dato l="Saldo" v={caso.rep_saldo || "—"} />
                 {caso.rep_garantia && <Dato l="Garantía informada" v={caso.rep_garantia} />}
-                <Dato l="Cómo vuelve" v={labelDe(ESTADOS_PRODUCTO, caso.estado_producto)} />
+                <Dato l="Cómo vuelve" v={labelDe(ESTADOS_TODOS, caso.estado_producto)} />
               </>
             ) : (
               <>
                 <Dato l="Producto" v={caso.producto_u_orden} />
                 <Dato l="Compró" v={fechaCorta(caso.fecha_compra)} />
                 <Dato l="Pagó con" v={caso.forma_pago} />
-                <Dato l="Estado del producto" v={labelDe(ESTADOS_PRODUCTO, caso.estado_producto)} />
+                <Dato l="Estado del producto" v={labelDe(ESTADOS_TODOS, caso.estado_producto)} />
                 <Dato l="Ticket" v={caso.con_ticket ? "Sí" : "No"} />
                 <Dato l="Original Apple/Samsung" v={caso.es_original_marca ? "Sí" : "No"} />
               </>
