@@ -30,7 +30,7 @@ function AppLayout() {
 
   const navItems = [
     { to: "/app", label: "Inicio", icon: Home, exact: true },
-    { to: "/app/reclamos", label: "Reclamos", icon: MessageSquareWarning },
+    { to: "/app/reclamos", label: "Pendientes", icon: MessageSquareWarning },
     { to: "/app/catalogo", label: "Catálogo", icon: Package },
     { to: "/app/historial", label: "Historial", icon: History },
     ...(isAdmin

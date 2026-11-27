@@ -13,7 +13,7 @@ function Home() {
   const tiles = [
     { to: "/app/illia", title: "Presupuestos", desc: "Reparaciones con repuestos", icon: Wrench, color: "from-primary to-accent" },
     { to: "/app/ordenes", title: "Ordenes de Trabajo", desc: "Ingreso y seguimiento de equipos", icon: ClipboardList, color: "from-primary to-accent" },
-    { to: "/app/reclamos", title: "Reclamos", desc: "Cambios, notas de credito y reclamos de clientes", icon: MessageSquareWarning, color: "from-accent to-primary" },
+    { to: "/app/reclamos", title: "Pendientes", desc: "Cambios, reingresos y casos de clientes", icon: MessageSquareWarning, color: "from-accent to-primary" },
     { to: "/app/catalogo", title: "Catalogo de Repuestos", desc: "Proveedores, precios, calidad", icon: Package, color: "from-accent to-primary" },
     { to: "/app/historial", title: "Historial", desc: "Buscar presupuestos", icon: History, color: "from-primary to-primary" },
     ...(isAdmin ? [
