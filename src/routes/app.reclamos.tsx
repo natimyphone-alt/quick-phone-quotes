@@ -58,11 +58,16 @@ const ESTADOS_EQUIPO = [
 ];
 const ESTADOS_TODOS = [...ESTADOS_PRODUCTO, ...ESTADOS_EQUIPO];
 const QUE_PIDE = [
-  { v: "cambio", l: "Cambiarlo por otro producto" },
+  { v: "cambio", l: "Cambio de producto" },
+  { v: "devolucion", l: "Devolución (nota de crédito)" },
+];
+// Opciones de casos viejos (solo para mostrarlos)
+const QUE_PIDE_TODOS = [
+  ...QUE_PIDE,
   { v: "nota_credito", l: "Nota de crédito" },
-  { v: "devolucion", l: "Que le devolvamos la plata" },
   { v: "revision", l: "Que revisemos el equipo / una respuesta" },
 ];
+const pideDevolucion = (c: any) => c.que_pide === "devolucion" || c.que_pide === "nota_credito";
 const FORMAS_PAGO = ["Efectivo", "Débito", "Crédito", "QR / Mercado Pago", "Transferencia", "Nota de crédito"];
 const CALIDADES = ["Original", "OLED", "No lleva repuesto"];
 
@@ -258,6 +263,7 @@ function textoGrupo(c: any, local?: string, conFotos = false) {
       l.push(`Fallado: ${siNo(c.prod_fallado)}${c.prod_fallado && c.prod_falla ? ` (${c.prod_falla})` : ""}`);
       l.push(`Completo con accesorios: ${siNo(c.prod_completo)} · Packaging en buen estado: ${siNo(c.prod_packaging_ok)}`);
       l.push(`Marcas de uso: ${siNo(c.prod_marcas_uso)}${c.prod_marcas_uso && c.prod_marcas_desc ? ` (${c.prod_marcas_desc})` : ""}`);
+      if (c.prod_liquidacion != null) l.push(`Liquidación o promo: ${siNo(c.prod_liquidacion)}`);
     } else if (c.estado_producto) {
       l.push(`Estado: ${labelDe(ESTADOS_TODOS, c.estado_producto)}`);
     }
@@ -266,7 +272,7 @@ function textoGrupo(c: any, local?: string, conFotos = false) {
   }
   if (c.que_pasa) l.push(`${c.tipo === "reparacion" ? "Qué falla ahora" : "Qué pasa"}: ${c.que_pasa}`);
   if (c.que_probamos) l.push(`Qué probamos: ${c.que_probamos}`);
-  if (c.que_pide) l.push(`Pide: ${labelDe(QUE_PIDE, c.que_pide)}`);
+  if (c.que_pide) l.push(`Pide: ${labelDe(QUE_PIDE_TODOS, c.que_pide)}`);
   if (c.amenaza_externa) l.push("ATENCIÓN: nombró Defensa del Consumidor, abogado o redes");
   l.push("");
   l.push(c.color === "verde" ? `VERDE – resuelto por el vendedor (${c.motivo_color})` : `Motivo: ${c.motivo_color}`);
@@ -385,6 +391,7 @@ const FORM_VACIO = {
   prod_packaging_ok: null as SN,
   prod_marcas_uso: null as SN,
   prod_marcas_desc: "",
+  prod_liquidacion: null as SN,
   estado_producto: "",
   que_pasa: "",
   que_probamos: "",
@@ -402,7 +409,7 @@ const FORM_VACIO = {
 };
 
 const CAMPOS_REP = ["rep_fecha_ingreso", "rep_taller", "rep_trabajo", "rep_calidad", "rep_remito", "rep_presupuesto", "rep_sena", "rep_saldo"] as const;
-const CAMPOS_PROD = ["prod_fallado", "prod_falla", "prod_completo", "prod_packaging_ok", "prod_marcas_uso", "prod_marcas_desc"] as const;
+const CAMPOS_PROD = ["prod_fallado", "prod_falla", "prod_completo", "prod_packaging_ok", "prod_marcas_uso", "prod_marcas_desc", "prod_liquidacion"] as const;
 
 function NuevoCaso({ puedeElegirLocal, onCreado, irACasos }: { puedeElegirLocal: boolean; onCreado: () => void; irACasos: () => void }) {
   const { user } = useAuth();
@@ -461,6 +468,7 @@ function NuevoCaso({ puedeElegirLocal, onCreado, irACasos }: { puedeElegirLocal:
       if (form.prod_packaging_ok === null) f.push("¿packaging en buen estado?");
       if (form.prod_marcas_uso === null) f.push("¿tiene marcas de uso?");
       if (form.prod_marcas_uso && vacio(form.prod_marcas_desc)) f.push("descripción de las marcas de uso");
+      if (form.prod_liquidacion === null) f.push("¿se vendió en liquidación o promo?");
     }
     if (esVarios && vacio(form.tema_detalle)) f.push("de qué se trata");
     if (vacio(form.que_pasa)) f.push(esVarios ? "qué pasa" : esReparacion ? "qué falla ahora" : "qué pasa");
@@ -644,6 +652,12 @@ function NuevoCaso({ puedeElegirLocal, onCreado, irACasos }: { puedeElegirLocal:
               )}
 
               <Seccion titulo="Estado del producto" />
+              <SiNoPregunta label="¿Se vendió en liquidación o promo?" v={form.prod_liquidacion} on={v => set("prod_liquidacion", v)} />
+              {form.prod_liquidacion && (
+                <p className="sm:col-span-2 text-sm rounded-md bg-warning/10 border border-warning p-3">
+                  Lo vendido en liquidación o promo <b>no tiene cambio</b>. No se lo digas al cliente: cargá el caso y lo confirma el encargado.
+                </p>
+              )}
               <SiNoPregunta label="¿Está fallado?" v={form.prod_fallado} on={v => set("prod_fallado", v)} />
               {form.prod_fallado && (
                 <F label="Describí la falla *" full>
@@ -743,8 +757,17 @@ function Resultado({ caso, local, fotos, otroCaso, irACasos }: { caso: any; loca
 
         {caso.color === "verde" && (
           <div className="space-y-2">
-            <p className="text-lg font-semibold flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-success" />Podés hacer el cambio.</p>
-            <p className="text-sm">{caso.motivo_color}. Pasá el cambio por el sistema y avisá en el grupo de pendientes con el botón de abajo.</p>
+            {pideDevolucion(caso) ? (
+              <>
+                <p className="text-lg font-semibold flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-success" />Podés hacer la nota de crédito.</p>
+                <p className="text-sm">Mandá la foto de la nota de crédito al grupo de pendientes.</p>
+              </>
+            ) : (
+              <>
+                <p className="text-lg font-semibold flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-success" />Podés hacer el cambio.</p>
+                <p className="text-sm">{caso.motivo_color}. Pasá el cambio por el sistema y avisá en el grupo de pendientes con el botón de abajo.</p>
+              </>
+            )}
           </div>
         )}
         {caso.color === "amarillo" && (
@@ -753,6 +776,9 @@ function Resultado({ caso, local, fotos, otroCaso, irACasos }: { caso: any; loca
             <p className="text-sm">Motivo: {caso.motivo_color}. No prometas nada. Decile al cliente:</p>
             {caso.es_original_marca && esProducto(caso) && (
               <p className="text-sm">Los originales salen probados del local: en principio no tienen cambio. Lo confirma el encargado.</p>
+            )}
+            {pideDevolucion(caso) && (
+              <p className="text-sm">Pide devolución: no se devuelve en el momento. Si el encargado la autoriza, se hace con nota de crédito y la emitís vos.</p>
             )}
             {caso.prod_completo === false && (
               <p className="text-sm">Si no está completo, en principio no tiene cambio. Lo confirma el encargado.</p>
@@ -1016,13 +1042,14 @@ function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }:
                     <Dato l="Completo con accesorios" v={siNo(caso.prod_completo)} />
                     <Dato l="Packaging en buen estado" v={siNo(caso.prod_packaging_ok)} />
                     <Dato l="Marcas de uso" v={siNo(caso.prod_marcas_uso) + (caso.prod_marcas_uso && caso.prod_marcas_desc ? ` (${caso.prod_marcas_desc})` : "")} />
+                    {caso.prod_liquidacion != null && <Dato l="Liquidación o promo" v={siNo(caso.prod_liquidacion)} />}
                   </>
                 ) : (
                   <Dato l="Estado del producto" v={labelDe(ESTADOS_TODOS, caso.estado_producto)} />
                 )}
               </>
             ) : null}
-            {caso.que_pide && <Dato l="Pide" v={labelDe(QUE_PIDE, caso.que_pide)} />}
+            {caso.que_pide && <Dato l="Pide" v={labelDe(QUE_PIDE_TODOS, caso.que_pide)} />}
             {caso.amenaza_externa && <Dato l="Atención" v="Nombró Defensa del Consumidor, abogado o redes" />}
             <Dato l="Creado" v={fecha(caso.created_at)} />
             <Dato l="Vence" v={fecha(caso.vence_at)} />
@@ -1036,6 +1063,11 @@ function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }:
           <div><b>{caso.tipo === "reparacion" ? "Qué falla ahora" : "Qué pasa"}:</b> {caso.que_pasa}</div>
           {caso.que_probamos && <div><b>Qué probamos:</b> {caso.que_probamos}</div>}
           {caso.resolucion && <div><b>Resolución:</b> {caso.resolucion}</div>}
+          {pideDevolucion(caso) && caso.nota_credito_autorizada_por && !caso.nota_credito_nro && (
+            <p className="rounded-md border border-success bg-success/10 p-3">
+              <b>Nota de crédito autorizada.</b> El local la emite en el sistema por el total y le avisa al cliente.
+            </p>
+          )}
           {caso.nota_credito_autorizada_por && (
             <div><b>Nota de crédito:</b> autorizada por {caso.nota_credito_autorizada_por}{caso.nota_credito_nro ? ` · N° ${caso.nota_credito_nro}` : ""}</div>
           )}
@@ -1095,14 +1127,14 @@ function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }:
                 <F label="Qué se decidió / qué se le dijo al cliente" full>
                   <Textarea rows={2} value={g.resolucion} onChange={e => setG({ ...g, resolucion: e.target.value })} />
                 </F>
-                {(caso.que_pide === "nota_credito" || caso.nota_credito_autorizada_por) && (
+                {(pideDevolucion(caso) || caso.nota_credito_autorizada_por) && (
                   <F label="N° de nota de crédito (cuando se emita)">
                     <Input value={g.nota_credito_nro} onChange={e => setG({ ...g, nota_credito_nro: e.target.value })} />
                   </F>
                 )}
                 <div className="sm:col-span-2 flex flex-wrap gap-2">
                   <Button onClick={() => guardar()} disabled={guardando}>Guardar</Button>
-                  {caso.que_pide === "nota_credito" && !caso.nota_credito_autorizada_por && (
+                  {pideDevolucion(caso) && !caso.nota_credito_autorizada_por && (
                     <Button variant="outline" onClick={autorizarNC} disabled={guardando}>Autorizar nota de crédito</Button>
                   )}
                 </div>
