@@ -312,25 +312,61 @@ function textoResumen(c: any, eventos: any[]) {
   return l.join("\n").replace(/\n{3,}/g, "\n\n");
 }
 
-// En el celular abre "Compartir" con las fotos (elegís el grupo de WhatsApp).
-// En la compu abre WhatsApp Web con el texto para elegir el grupo.
-async function compartirEnGrupo(texto: string, files: File[] = []): Promise<boolean> {
+// Solo en el celular se ofrece "Compartir" (en la compu abre la app de escritorio y se traba)
+const esCelular = () => /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+async function compartirCelular(texto: string, files: File[] = []): Promise<boolean> {
   const nav: any = navigator;
-  if (files.length && nav.canShare?.({ files, text: texto })) {
-    try {
-      await nav.share({ files, text: texto });
-      return true;
-    } catch (e: any) {
-      if (e?.name === "AbortError") return false;
-    }
+  try {
+    if (files.length && nav.canShare?.({ files, text: texto })) await nav.share({ files, text: texto });
+    else await nav.share({ text: texto });
+    return true;
+  } catch {
+    return false;
   }
-  window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, "_blank", "noopener,noreferrer");
-  return true;
 }
 
-// Para Vanesa: abre WhatsApp Web en la compu con el mensaje listo para elegir el grupo
-function abrirWhatsAppWeb(texto: string) {
-  window.open(`https://web.whatsapp.com/send?text=${encodeURIComponent(texto)}`, "_blank", "noopener,noreferrer");
+async function copiarTexto(texto: string) {
+  try {
+    await navigator.clipboard.writeText(texto);
+  } catch {
+    // Navegadores viejos
+    const t = document.createElement("textarea");
+    t.value = texto; document.body.appendChild(t); t.select(); document.execCommand("copy"); t.remove();
+  }
+}
+
+// Ventana con el resumen listo para copiar y pegar en el grupo de pendientes
+function ResumenGrupo({ titulo, texto, files, onListo, onClose }: {
+  titulo: string; texto: string; files?: () => Promise<File[]>; onListo?: () => void; onClose: () => void;
+}) {
+  const [listo, setListo] = useState(false);
+  const copiar = async () => {
+    await copiarTexto(texto);
+    toast.success("Resumen copiado: pegalo en el grupo de pendientes");
+    setListo(true);
+    onListo?.();
+  };
+  const compartir = async () => {
+    const fs = files ? await files().catch(() => []) : [];
+    if (await compartirCelular(texto, fs)) { setListo(true); onListo?.(); }
+  };
+  return (
+    <Dialog open onOpenChange={o => !o && onClose()}>
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+        <DialogHeader><DialogTitle>{titulo}</DialogTitle></DialogHeader>
+        <pre className="whitespace-pre-wrap text-sm bg-muted rounded-md p-3 font-sans max-h-[50vh] overflow-y-auto">{texto}</pre>
+        <p className="text-sm text-muted-foreground">
+          Tocá <b>Copiar resumen</b>, abrí el grupo de pendientes en WhatsApp y pegalo. Las fotos adjuntalas vos.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={copiar}><Send className="w-4 h-4 mr-1" />Copiar resumen</Button>
+          {esCelular() && <Button variant="outline" onClick={compartir}>Compartir (con fotos)</Button>}
+          <Button variant="ghost" onClick={onClose}>{listo ? "Listo" : "Cerrar"}</Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
 async function marcarAvisado(id: number, autor: string, momento: "alta" | "resolucion" = "alta") {
@@ -344,27 +380,24 @@ function BotonesGrupo({ caso, local, files, onAvisado, momento = "alta", texto }
   momento?: "alta" | "resolucion"; texto?: () => string;
 }) {
   const sesion = useSesion();
-  const [trabajando, setTrabajando] = useState(false);
-  const armar = (conFotos: boolean) => (texto ? texto() : textoGrupo(caso, local, conFotos));
-  const mandar = async () => {
-    setTrabajando(true);
-    const fs = momento === "alta" ? await files().catch(() => []) : [];
-    const ok = await compartirEnGrupo(armar(fs.length > 0), fs);
-    if (ok && (await marcarAvisado(caso.id, sesion.nombre, momento))) onAvisado();
-    setTrabajando(false);
-  };
-  const copiar = async () => {
-    await navigator.clipboard.writeText(armar(false));
-    toast.success("Mensaje copiado: pegalo en el grupo de pendientes");
-    if (await marcarAvisado(caso.id, sesion.nombre, momento)) onAvisado();
-  };
+  const [abierto, setAbierto] = useState(false);
+  const [avisado, setAvisado] = useState(false);
+  const cerrar = () => { setAbierto(false); if (avisado) onAvisado(); };
   return (
-    <div className="flex flex-wrap gap-2">
-      <Button onClick={mandar} disabled={trabajando}>
-        <Send className="w-4 h-4 mr-1" />{momento === "resolucion" ? "Avisar resolución al grupo" : "Mandar al grupo de pendientes"}
+    <>
+      <Button onClick={() => setAbierto(true)}>
+        <Send className="w-4 h-4 mr-1" />{momento === "resolucion" ? "Resumen de la resolución para el grupo" : "Resumen para el grupo de pendientes"}
       </Button>
-      <Button variant="outline" onClick={copiar}>Copiar mensaje</Button>
-    </div>
+      {abierto && (
+        <ResumenGrupo
+          titulo={momento === "resolucion" ? `Resolución del caso ${caso.numero}` : `Caso ${caso.numero}`}
+          texto={texto ? texto() : textoGrupo(caso, local)}
+          files={momento === "alta" ? files : undefined}
+          onListo={async () => { if (!avisado && (await marcarAvisado(caso.id, sesion.nombre, momento))) setAvisado(true); }}
+          onClose={cerrar}
+        />
+      )}
+    </>
   );
 }
 
@@ -804,8 +837,7 @@ function Resultado({ caso, local, fotos, otroCaso, irACasos }: { caso: any; loca
                 <p className="text-sm">Cuando el encargado lo resuelva, lo vas a ver en la pestaña Casos y vas a tener que avisar la resolución.</p>
               )}
               <p className="text-sm text-muted-foreground">
-                En el celular se abre "Compartir" con el mensaje y las fotos: elegí WhatsApp y el grupo. En la compu se abre WhatsApp Web
-                con el mensaje; las fotos adjuntalas vos.
+                Abrí el resumen, copialo y pegalo en el grupo de pendientes junto con las fotos.
               </p>
               <BotonesGrupo caso={caso} local={local} files={async () => fotos} onAvisado={() => setAvisado(true)} />
             </>
@@ -983,13 +1015,10 @@ function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }:
     onGuardado();
   };
 
-  const mandarResumen = async () => {
-    const ok = await compartirEnGrupo(textoResumen(caso, eventos));
-    if (ok) toast.success("Resumen listo para mandar");
-  };
+  const [verResumen, setVerResumen] = useState(false);
   const copiarResumen = async () => {
-    await navigator.clipboard.writeText(textoResumen(caso, eventos));
-    toast.success("Resumen copiado");
+    await copiarTexto(textoResumen(caso, eventos));
+    toast.success("Resumen copiado: pegalo en el grupo de pendientes");
   };
 
   const autorizarNC = () => guardar({ nota_credito_autorizada_por: nombre || "encargado" });
@@ -1103,8 +1132,8 @@ function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }:
           <div className="flex flex-wrap gap-2">
             <Button size="sm" variant="secondary" onClick={mandarFrase}><MessageCircle className="w-4 h-4 mr-1" />Mandar la frase fija al cliente</Button>
             {puedeGestionar && caso.color !== "verde" && (
-              <Button size="sm" variant="outline" onClick={() => abrirWhatsAppWeb(textoResumen(caso, eventos))}>
-                <MessageCircle className="w-4 h-4 mr-1" />Mandar al grupo (WhatsApp Web)
+              <Button size="sm" variant="outline" onClick={() => setVerResumen(true)}>
+                <Send className="w-4 h-4 mr-1" />Resumen para el grupo
               </Button>
             )}
           </div>
@@ -1150,8 +1179,7 @@ function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }:
               </p>
               <pre className="whitespace-pre-wrap text-xs bg-muted rounded-md p-3 font-sans max-h-64 overflow-y-auto">{textoResumen(caso, eventos)}</pre>
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={mandarResumen}><Send className="w-4 h-4 mr-1" />Mandar resumen al grupo</Button>
-                <Button size="sm" variant="outline" onClick={copiarResumen}>Copiar</Button>
+                <Button size="sm" onClick={copiarResumen}><Send className="w-4 h-4 mr-1" />Copiar resumen</Button>
               </div>
             </CardContent>
           </Card>
@@ -1172,6 +1200,9 @@ function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }:
           </div>
         </div>
       </DialogContent>
+      {verResumen && (
+        <ResumenGrupo titulo={`Resumen del caso ${caso.numero}`} texto={textoResumen(caso, eventos)} onClose={() => setVerResumen(false)} />
+      )}
     </Dialog>
   );
 }
