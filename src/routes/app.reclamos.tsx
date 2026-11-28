@@ -778,7 +778,7 @@ function Resultado({ caso, local, fotos, otroCaso, irACasos }: { caso: any; loca
   const ui = COLOR_UI[caso.color] ?? COLOR_UI.amarillo;
   const [avisado, setAvisado] = useState(false);
   const mandarFrase = () =>
-    abrirWhatsApp(telWhatsApp(caso.cliente_telefono), `Hola ${caso.cliente_nombre}, te escribimos de MyPhone. ${FRASE_FIJA}`);
+    abrirWhatsApp(telWhatsApp(caso.cliente_telefono), `Hola ${caso.cliente_nombre}, te escribimos de MyPhone. Tu número de caso es ${caso.numero}. ${FRASE_FIJA}`);
 
   return (
     <Card className={`border-2 ${ui.box}`}>
@@ -1024,7 +1024,7 @@ function DetalleCaso({ caso: casoInicial, puedeGestionar, onClose, onGuardado }:
   const autorizarNC = () => guardar({ nota_credito_autorizada_por: nombre || "encargado" });
 
   const mandarFrase = () =>
-    abrirWhatsApp(telWhatsApp(caso.cliente_telefono), `Hola ${caso.cliente_nombre}, te escribimos de MyPhone. ${FRASE_FIJA}`);
+    abrirWhatsApp(telWhatsApp(caso.cliente_telefono), `Hola ${caso.cliente_nombre}, te escribimos de MyPhone. Tu número de caso es ${caso.numero}. ${FRASE_FIJA}`);
 
   const ui = COLOR_UI[caso.color] ?? COLOR_UI.amarillo;
 
